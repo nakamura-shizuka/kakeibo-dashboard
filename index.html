@@ -1807,10 +1807,10 @@
                 chipsHtml += '</div>';
 
                 // メモ編集行
-                chipsHtml += '<div style="display:flex; gap:6px; align-items:center;">' +
-                    '<label style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">✏️ 品名:</label>' +
-                    '<input type="text" class="edit-memo-input input-field" value="' + escapeHtml(rec.memo) + '" style="flex:1; font-size:0.8rem; padding:6px 8px;">' +
-                    '<button class="edit-memo-save" style="font-size:0.7rem; padding:5px 10px; border-radius:16px; border:none; background:var(--accent-primary); color:#fff; cursor:pointer;">変更</button>' +
+                chipsHtml += '<div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">' +
+                    '<label style="flex: 0 0 auto; font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">✏️ 品名:</label>' +
+                    '<input type="text" class="edit-memo-input input-field" value="' + escapeHtml(rec.memo) + '" style="flex: 1 1 120px; min-width:120px; font-size:0.8rem; padding:6px 8px;">' +
+                    '<button class="edit-memo-save" style="flex: 0 0 auto; font-size:0.7rem; padding:6px 12px; border-radius:16px; border:none; background:var(--accent-primary); color:#fff; cursor:pointer;">変更</button>' +
                     '</div>';
 
                 editDiv.innerHTML = chipsHtml;
