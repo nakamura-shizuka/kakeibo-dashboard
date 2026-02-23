@@ -1124,6 +1124,9 @@
                         }
                     });
                 }
+                // キャッシュバスター（常に最新データを取得するため）
+                query += '&_=' + new Date().getTime();
+
                 return fetch(GAS_API_URL + '?' + query)
                     .then(function (res) { return res.json(); });
             } else {
