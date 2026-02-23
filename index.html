@@ -1852,7 +1852,7 @@
                             }
 
                             showToast('💾 保存中...');
-                            callGAS('updateRecord', { rowIndex: ri, category: newCat }, 'POST')
+                            callGAS('updateRecord', { rowIndex: ri, category: newCat })
                                 .then(function (result) {
                                     if (result.success) {
                                         showToast('✅ カテゴリを「' + newCat + '」に変更しました');
@@ -1884,7 +1884,7 @@
 
                         this.textContent = '...';
                         var btn = this;
-                        callGAS('updateRecord', { rowIndex: ri, memo: newMemo }, 'POST')
+                        callGAS('updateRecord', { rowIndex: ri, memo: newMemo })
                             .then(function (result) {
                                 btn.textContent = '変更';
                                 if (result.success) {
@@ -2182,7 +2182,7 @@
                 categories: newCats,
                 fixedCosts: fxStr,
                 accounts: accStr
-            }, 'POST')
+            })
                 .then(function (res) {
                     btn.disabled = false;
                     btn.innerHTML = originalText;
@@ -2359,7 +2359,7 @@
                 date: dateStr,
                 account: account,
                 type: typeLabel
-            }, 'POST')
+            })
                 .then(function (result) {
                     btn.disabled = false;
                     btn.textContent = '記録する 📝';
