@@ -2146,7 +2146,7 @@
             var fxStr = JSON.stringify(newFx);
             var accStr = JSON.stringify(newAcc);
 
-            if (typeof google === 'undefined') {
+            if (!GAS_API_URL && typeof google === 'undefined') {
                 setTimeout(function () {
                     currentSettings.budget = parseInt(newBudget);
                     currentSettings.categories = newCats;
@@ -2324,7 +2324,7 @@
             btn.disabled = true;
             btn.textContent = '記録中...';
 
-            if (typeof google === 'undefined') {
+            if (!GAS_API_URL && typeof google === 'undefined') {
                 setTimeout(function () {
                     btn.disabled = false;
                     btn.textContent = '記録する 📝';
@@ -2376,7 +2376,7 @@
             btn.textContent = '読込中...';
             btn.disabled = true;
 
-            if (typeof google === 'undefined') {
+            if (!GAS_API_URL && typeof google === 'undefined') {
                 setTimeout(function () {
                     btn.textContent = '全件表示';
                     btn.disabled = false;
