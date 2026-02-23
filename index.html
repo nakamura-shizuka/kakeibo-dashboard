@@ -832,6 +832,8 @@
                 </div>
             </div>
             <div class="header-actions">
+                <button class="settings-btn" onclick="requestAiAnalysis()" title="AIで分析する"
+                    style="font-size: 1.1rem; color: var(--accent);">💡</button>
                 <button class="settings-btn" onclick="openSettingsModal()" title="設定">⚙️</button>
                 <button class="refresh-btn" onclick="loadData(currentYear, currentMonth)" title="更新">🔄</button>
             </div>
@@ -882,10 +884,15 @@
 
     <!-- AIアドバイスカード -->
     <div class="card" id="aiAdviceCard"
-        style="display:none; background: linear-gradient(135deg, #fff5fb, #f6f8ff); border: 2px solid #ffccf0;">
-        <div class="card-title" style="color: #d175b7; margin-bottom: 8px;"><span class="icon">✨</span> AIからのメッセージ</div>
+        style="display:none; background: linear-gradient(135deg, #f8f9fa, #ffffff); border: 2px solid #e2e8f0;">
+        <div class="card-title" style="color: #475569; margin-bottom: 8px;">
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <span><span class="icon" style="background: #e2e8f0;">🤖</span> 専属アナリストの分析結果</span>
+                <span id="aiAnalysisLoading" style="display:none;font-size:0.8rem;color:#64748b;">分析中...</span>
+            </div>
+        </div>
         <div id="aiMessageText"
-            style="font-size: 0.9rem; line-height: 1.6; color: var(--text-main); white-space: pre-wrap;"></div>
+            style="font-size: 0.9rem; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap;"></div>
     </div>
 
     <!-- カテゴリ別支出 -->
@@ -2413,6 +2420,50 @@
             setTimeout(function () {
                 toast.className = 'toast';
             }, 3000);
+        }
+
+        /**
+         * 💡 AI分析をリクエストする
+         */
+        function requestAiAnalysis() {
+            var btn = document.querySelector('button[title="AIで分析する"]');
+            var loadingSpan = document.getElementById('aiAnalysisLoading');
+            var card = document.getElementById('aiAdviceCard');
+            var msgArea = document.getElementById('aiMessageText');
+
+            if (btn) btn.disabled = true;
+            if (loadingSpan) loadingSpan.style.display = 'inline';
+            if (msgArea) msgArea.textContent = '過去のデータや予算設定から、専属アナリストが分析レポートを作成しています... (約10〜20秒かかります) 🤖💭';
+            card.style.display = 'block';
+
+            if (!GAS_API_URL && typeof google === 'undefined') {
+                setTimeout(function () {
+                    if (btn) btn.disabled = false;
+                    if (loadingSpan) loadingSpan.style.display = 'none';
+                    msgArea.textContent = "【ローカルデモ分析結果】\n\n・食費が先月比で+15%ペースで進行しています。今週末の外食は控えることをおすすめします。\n・このペースだと月末に予算を約8,000円超過する見込みです。浪費ポイントは「交際費」「娯楽費」です。";
+                    showToast('✅ 分析が完了しました');
+                }, 2000);
+                return;
+            }
+
+            callGAS('getAiAnalysis', { isWeekly: false }) // ダッシュボードからは一旦月次ベースの分析をコール
+                .then(function (result) {
+                    if (btn) btn.disabled = false;
+                    if (loadingSpan) loadingSpan.style.display = 'none';
+                    if (result.success) {
+                        msgArea.textContent = result.analysis;
+                        showToast('✅ AI分析が完了しました');
+                    } else {
+                        msgArea.textContent = "エラーが発生しました: " + result.message;
+                        showToast('❌ ' + result.message, true);
+                    }
+                })
+                .catch(function (err) {
+                    if (btn) btn.disabled = false;
+                    if (loadingSpan) loadingSpan.style.display = 'none';
+                    msgArea.textContent = "通信エラーが発生しました。";
+                    showToast('❌ 通信エラー', true);
+                });
         }
 
         /**
