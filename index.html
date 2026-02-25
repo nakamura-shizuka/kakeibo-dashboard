@@ -2052,15 +2052,24 @@
 
         function gatherFixedExpenses() {
             var list = [];
-            document.querySelectorAll('.fixed-expense-row').forEach(function (row) {
-                var date = row.querySelector('.fe-date').value;
-                var memo = row.querySelector('.fe-memo').value.trim();
-                var cat = row.querySelector('.fe-category').value;
-                var amount = row.querySelector('.fe-amount').value;
-                if (memo && amount) {
-                    list.push({ date: parseInt(date), memo: memo, category: cat, amount: parseInt(amount) });
-                }
-            });
+            var rows = document.querySelectorAll('#fixedExpensesList .fixed-expense-row');
+            if (rows && rows.length > 0) {
+                rows.forEach(function (row) {
+                    var dateEl = row.querySelector('.fe-date');
+                    var memoEl = row.querySelector('.fe-memo');
+                    var catEl = row.querySelector('.fe-category');
+                    var amountEl = row.querySelector('.fe-amount');
+                    if (dateEl && memoEl && catEl && amountEl) {
+                        var date = dateEl.value;
+                        var memo = memoEl.value.trim();
+                        var cat = catEl.value;
+                        var amount = amountEl.value;
+                        if (memo && amount) {
+                            list.push({ date: parseInt(date), memo: memo, category: cat, amount: parseInt(amount) });
+                        }
+                    }
+                });
+            }
             return list;
         }
 
