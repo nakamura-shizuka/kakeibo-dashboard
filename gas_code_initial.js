@@ -187,7 +187,7 @@ function processMessage(userMessage) {
 /**
  * スプレッドシートに1行追加
  */
-function writeToSpreadsheet(memo, amount, category, method, dateStrInput, account) {
+function writeToSpreadsheet(memo, amount, category, method, dateStrInput, account, entryTypeInput) {
     if (!SPREADSHEET_ID) throw new Error("SPREADSHEET_ID未設定");
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -200,7 +200,7 @@ function writeToSpreadsheet(memo, amount, category, method, dateStrInput, accoun
 
     const dateStr = dateStrInput || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM/dd");
     const accountName = account || '未設定';
-    const entryType = typeLabel || '支出';
+    const entryType = entryTypeInput || '支出';
     sheet.appendRow([dateStr, amount, category || '未分類', memo, entryType, method || 'LINE手入力', false, accountName]);
 }
 
