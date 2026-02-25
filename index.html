@@ -1797,9 +1797,9 @@
                     var isActive = cat === rec.category;
                     var chipIcon = CATEGORY_ICONS[cat] || '📦';
                     chipsHtml += '<button class="cat-chip" data-cat="' + escapeHtml(cat) + '" style="' +
-                        'font-size:0.75rem; padding:5px 10px; border-radius:16px; cursor:pointer; ' +
-                        'border:' + (isActive ? '2px solid var(--accent-primary)' : '1px solid var(--border-card)') + '; ' +
-                        'background:' + (isActive ? 'var(--accent-primary)' : 'transparent') + '; ' +
+                        '-webkit-appearance:none; font-size:0.75rem; padding:5px 10px; border-radius:16px; cursor:pointer; ' +
+                        'border:' + (isActive ? '2px solid var(--accent)' : '1px solid var(--border-card)') + '; ' +
+                        'background:' + (isActive ? 'var(--accent)' : 'transparent') + '; ' +
                         'color:' + (isActive ? '#fff' : 'var(--text-primary)') + '; ' +
                         'font-weight:' + (isActive ? '700' : '400') + ';">' +
                         chipIcon + ' ' + escapeHtml(cat) + '</button>';
@@ -1810,7 +1810,7 @@
                 chipsHtml += '<div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">' +
                     '<label style="flex: 0 0 auto; font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">✏️ 品名:</label>' +
                     '<input type="text" class="edit-memo-input input-field" value="' + escapeHtml(rec.memo) + '" style="flex: 1 1 120px; min-width:120px; font-size:0.8rem; padding:6px 8px;">' +
-                    '<button class="edit-memo-save" style="flex: 0 0 auto; font-size:0.7rem; padding:6px 12px; border-radius:16px; border:none; background:var(--accent-primary); color:#fff; cursor:pointer;">変更</button>' +
+                    '<button class="edit-memo-save" style="-webkit-appearance:none; flex: 0 0 auto; font-size:0.7rem; padding:6px 12px; border-radius:16px; border:none; background:var(--accent); color:#fff; cursor:pointer;">変更</button>' +
                     '</div>';
 
                 editDiv.innerHTML = chipsHtml;
@@ -1841,8 +1841,8 @@
                                 c.style.color = 'var(--text-primary)';
                                 c.style.fontWeight = '400';
                             });
-                            this.style.border = '2px solid var(--accent-primary)';
-                            this.style.background = 'var(--accent-primary)';
+                            this.style.border = '2px solid var(--accent)';
+                            this.style.background = 'var(--accent)';
                             this.style.color = '#fff';
                             this.style.fontWeight = '700';
 
