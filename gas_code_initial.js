@@ -994,6 +994,141 @@ function sendMonthlyReport() {
 }
 
 /**
+ * 📧 Gmailからクレジットカードの利用通知を取得してスプレッドシートへ自動記帳する
+ * 定期実行トリガー（例: 1時間おき）で駆動する想定
+ */
+function fetchGmailTransactions() {
+    console.log("fetchGmailTransactions開始");
+
+    // 検索条件: 三井住友カード または PayPayカード で、未処理（ラベルなし等）のもの
+    // 今回は簡易的に「過去1日分」かつ「特定の件名」で検索
+    // 実際には専用ラベル "kakeibo-processed" 等を付けて既読管理するのが定石
+    const query = 'newer_than:1d (subject:"ご利用の確認" OR subject:"カードご利用のお知らせ" OR subject:"PayPayカードのご利用確認") -label:kakeibo-processed';
+    const threads = GmailApp.search(query, 0, 20); // 最大20スレッド
+    if (threads.length === 0) {
+        console.log("処理対象のメールはありません");
+        return;
+    }
+
+    // 処理済みマーク用のラベルを取得（なければ作成）
+    let processedLabel = GmailApp.getUserLabelByName("kakeibo-processed");
+    if (!processedLabel) {
+        processedLabel = GmailApp.createLabel("kakeibo-processed");
+    }
+
+    // スプレッドシート情報を取得（重複チェック用）
+    if (!SPREADSHEET_ID) return;
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('家計簿');
+    let existingData = [];
+    if (sheet && sheet.getLastRow() > 1) {
+        // [Date, Amount, Category, Memo] を取得
+        existingData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getDisplayValues();
+    }
+
+    let addCount = 0;
+
+    threads.forEach(thread => {
+        const messages = thread.getMessages();
+        messages.forEach(msg => {
+            const subject = msg.getSubject();
+            const body = msg.getPlainBody();
+            const from = msg.getFrom();
+
+            // パース処理
+            const parsed = parseCardEmail(subject, body, from);
+            if (parsed && parsed.length > 0) {
+                parsed.forEach(record => {
+                    // 重複チェック (同日・同額・同摘要が存在するか)
+                    const isDuplicate = existingData.some(row =>
+                        row[0] === record.date &&
+                        parseInt(String(row[1]).replace(/[,，]/g, "") || "0", 10) === record.amount &&
+                        row[3] === record.memo
+                    );
+
+                    if (!isDuplicate) {
+                        writeToSpreadsheet(record.memo, record.amount, '未分類', '自動(カード)', record.date, record.account, '支出');
+                        addCount++;
+                        // 新規追加したものをexistingDataにも追加し、同一処理内の重複を防ぐ
+                        existingData.push([record.date, record.amount, '未分類', record.memo]);
+                    } else {
+                        console.log("重複のためスキップ:", record.date, record.amount, record.memo);
+                    }
+                });
+            }
+        });
+
+        // スレッドに処理済みラベルを付与
+        thread.addLabel(processedLabel);
+    });
+
+    console.log(`fetchGmailTransactions完了. ${addCount}件追加しました`);
+}
+
+/**
+ * 💳 クレジットカード利用通知メールの本文を解析し、日付・金額・店名を抽出
+ * @returns {Array} [{date: 'YYYY/MM/DD', amount: 1234, memo: '店名', account: 'カード等'}]
+ */
+function parseCardEmail(subject, body, from) {
+    const records = [];
+
+    // 1. 三井住友カード (ご利用のお知らせ)
+    if (from.includes('vpass.ne.jp') && subject.includes('ご利用のお知らせ')) {
+        // 利用日: 2024/02/25 のようなフォーマットを想定
+        const dateMatch = body.match(/利用日\s*[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/);
+        // 利用金額: 1,234円 のようなフォーマットを想定
+        const amountMatch = body.match(/利用金額\s*[：:]\s*([0-9,]+)円/);
+        // 利用店名: Amazon.co.jp のようなフォーマット
+        const shopMatch = body.match(/利用店名・商品名\s*[：:]\s*(.+)/);
+
+        if (dateMatch && amountMatch) {
+            const dateStr = dateMatch[1];
+            // 日付を「YYYY/MM/DD」フォーマットに（月日のゼロ埋めなどを統一する場合はここで処理）
+            const d = new Date(dateStr);
+            const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
+
+            const amount = parseInt(amountMatch[1].replace(/,/g, ''), 10);
+            const memo = shopMatch ? shopMatch[1].trim() : '三井住友カード利用';
+
+            records.push({
+                date: formattedDate,
+                amount: amount,
+                memo: memo,
+                account: '三井住友カード'
+            });
+        }
+    }
+
+    // 2. PayPayカード
+    else if (from.includes('paypay-card.co.jp') && subject.includes('ご利用確認')) {
+        // 利用日時：2024/02/25 10:20:30
+        const dateMatch = body.match(/利用日時\s*[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/);
+        // 利用金額：1,234円
+        const amountMatch = body.match(/利用金額\s*[：:]\s*([0-9,]+)円/);
+        // 利用店名等：PayPay決済
+        const shopMatch = body.match(/利用店名等\s*[：:]\s*(.+)/);
+
+        if (dateMatch && amountMatch) {
+            const d = new Date(dateMatch[1]);
+            const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
+            const amount = parseInt(amountMatch[1].replace(/,/g, ''), 10);
+            const memo = shopMatch ? shopMatch[1].trim() : 'PayPayカード利用';
+
+            records.push({
+                date: formattedDate,
+                amount: amount,
+                memo: memo,
+                account: 'PayPayカード'
+            });
+        }
+    }
+
+    // 必要に応じて他カードの正規表現を追加（楽天カード等）
+
+    return records;
+}
+
+/**
  * 月間予算を取得（設定シートから。なければデフォルト値）
  */
 function getMonthlyBudget(ss) {
