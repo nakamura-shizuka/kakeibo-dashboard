@@ -2032,16 +2032,22 @@
         }
 
         function addFixedExpenseRow() {
-            if (!currentSettings.fixedExpenses) currentSettings.fixedExpenses = [];
-            currentSettings.fixedExpenses.push({ date: 25, memo: '', category: '未分類', amount: '' });
-            renderFixedExpenses();
+            var container = document.getElementById('fixedExpensesList');
+            if (container.querySelector('.fixed-expense-row') === null && container.innerHTML.indexOf('固定費は設定されていません') !== -1) {
+                container.innerHTML = '';
+            }
+            var newIndex = container.children.length;
+            container.appendChild(createFixedExpenseElement({ date: 25, memo: '', category: '未分類', amount: '' }, newIndex));
         }
 
         function removeFixedExpenseRow(btnEl) {
             var row = btnEl.closest('.fixed-expense-row');
-            var index = row.getAttribute('data-index');
-            currentSettings.fixedExpenses.splice(index, 1);
-            renderFixedExpenses();
+            if (row && row.parentNode) {
+                row.parentNode.removeChild(row);
+            }
+            if (document.getElementById('fixedExpensesList').children.length === 0) {
+                document.getElementById('fixedExpensesList').innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">固定費は設定されていません</div>';
+            }
         }
 
         function gatherFixedExpenses() {
@@ -2085,16 +2091,22 @@
         }
 
         function addAccountRow() {
-            if (!currentSettings.accounts) currentSettings.accounts = [];
-            currentSettings.accounts.push({ name: '', balance: 0 });
-            renderAccounts();
+            var container = document.getElementById('accountsList');
+            if (container.querySelector('.fixed-expense-row') === null && container.innerHTML.indexOf('口座が設定されていません') !== -1) {
+                container.innerHTML = '';
+            }
+            var newIndex = container.children.length;
+            container.appendChild(createAccountElement({ name: '', balance: '' }, newIndex));
         }
 
         function removeAccountRow(btnEl) {
             var row = btnEl.closest('.fixed-expense-row');
-            var index = row.getAttribute('data-index');
-            currentSettings.accounts.splice(index, 1);
-            renderAccounts();
+            if (row && row.parentNode) {
+                row.parentNode.removeChild(row);
+            }
+            if (document.getElementById('accountsList').children.length === 0) {
+                document.getElementById('accountsList').innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">口座が設定されていません</div>';
+            }
         }
 
         function gatherAccounts() {
@@ -2118,8 +2130,30 @@
         }
 
         document.getElementById('settingCategories').addEventListener('blur', function () {
-            currentSettings.fixedExpenses = gatherFixedExpenses();
-            renderFixedExpenses();
+            var catsStr = this.value;
+            var cats = catsStr.split(',').map(function (c) { return c.trim(); }).filter(function (c) { return c; });
+            document.querySelectorAll('.fe-category').forEach(function (select) {
+                var currentVal = select.value;
+                select.innerHTML = '';
+                var hasSavedCat = false;
+                cats.forEach(function (c) {
+                    var option = document.createElement('option');
+                    option.value = c;
+                    option.textContent = c;
+                    if (c === currentVal) {
+                        option.selected = true;
+                        hasSavedCat = true;
+                    }
+                    select.appendChild(option);
+                });
+                if (!hasSavedCat && currentVal) {
+                    var option = document.createElement('option');
+                    option.value = escapeHtml(currentVal);
+                    option.textContent = escapeHtml(currentVal);
+                    option.selected = true;
+                    select.appendChild(option);
+                }
+            });
         });
 
         function openSettingsModal() {
