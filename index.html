@@ -1095,6 +1095,8 @@
     <!-- D3.js -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://unpkg.com/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         // チャート用カラーパレット (Kawaii & Clean パステル)
         const COLORS = ['#FF9CEE', '#B28DFF', '#6EB5FF', '#85E3FF', '#AFF8D8', '#E7FFAC', '#FFF5BA', '#FFABAB'];
@@ -2512,8 +2514,15 @@
                     if (btn) btn.disabled = false;
                     if (loadingSpan) loadingSpan.style.display = 'none';
                     if (result.success) {
-                        alert("GASからの応答デバッグ:\n" + result.analysis);
-                        msgArea.textContent = result.analysis;
+                        try {
+                            msgArea.innerHTML = marked.parse(result.analysis);
+                        } catch (e) {
+                            msgArea.textContent = result.analysis;
+                        }
+                        // 強制的に見えるようにスタイルを調整
+                        msgArea.style.padding = '8px';
+                        msgArea.style.color = '#1E293B';
+
                         showToast('✅ AI分析が完了しました');
                     } else {
                         msgArea.textContent = "エラーが発生しました: " + result.message;
