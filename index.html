@@ -2512,6 +2512,7 @@
                     if (btn) btn.disabled = false;
                     if (loadingSpan) loadingSpan.style.display = 'none';
                     if (result.success) {
+                        alert("GASからの応答デバッグ:\n" + result.analysis);
                         msgArea.textContent = result.analysis;
                         showToast('✅ AI分析が完了しました');
                     } else {
