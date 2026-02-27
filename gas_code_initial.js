@@ -903,7 +903,7 @@ ${prevCatStr}
 ${currentCatStr}
 `;
 
-    // Gemini API リクエスト
+    // Gemini API リクエスト (Gemini 2.5 Flashを使用)
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     const payload = {
         "contents": [
@@ -926,15 +926,20 @@ ${currentCatStr}
         const resJson = JSON.parse(response.getContentText());
         if (resJson.error) {
             console.error("Gemini API Error:", resJson.error);
-            return "分析エラー: AIへの接続に失敗しました。";
+            return `分析エラー: AIへの接続に失敗しました(${resJson.error.message || '詳細不明'})`;
+        }
+
+        if (!resJson.candidates || resJson.candidates.length === 0 || !resJson.candidates[0].content) {
+            console.error("Gemini API Parse Error:", resJson);
+            return "分析エラー: AIからの応答形式が想定外でした。データが少なすぎるか、APIキーの設定不備の可能性があります。";
         }
 
         const answer = resJson.candidates[0].content.parts[0].text;
-        return answer.trim();
+        return answer ? answer.trim() : "分析エラー: AIから空の回答が返されました。";
 
     } catch (e) {
         console.error("AI分析実行エラー:", e);
-        return "分析エラー: システムエラーが発生しました。";
+        return "分析エラー: ネットワークまたはシステムエラーが発生しました。 (" + e.message + ")";
     }
 }
 
@@ -992,6 +997,61 @@ function sendMonthlyReport() {
 
     pushLineMessage(userId, message);
 }
+
+/**
+ * ⏰ 週次レポート用のトリガーを作成する (毎週土曜日の夕方 18:00頃)
+ */
+function setupWeeklyTrigger() {
+    // 既存の同名トリガーを削除
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(trigger => {
+        if (trigger.getHandlerFunction() === 'sendWeeklyReport') {
+            ScriptApp.deleteTrigger(trigger);
+        }
+    });
+
+    // 毎週土曜日の18時頃に実行
+    ScriptApp.newTrigger('sendWeeklyReport')
+        .timeBased()
+        .onWeekDay(ScriptApp.WeekDay.SATURDAY)
+        .atHour(18)
+        .create();
+
+    console.log("週次レポート(sendWeeklyReport)のトリガーを土曜日18時台に設定しました。");
+}
+
+/**
+ * ⏰ 月次レポート用のトリガーを作成する (毎月1日の朝 08:00頃)
+ */
+function setupMonthlyTrigger() {
+    // 既存の同名トリガーを削除
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(trigger => {
+        if (trigger.getHandlerFunction() === 'sendMonthlyReport') {
+            ScriptApp.deleteTrigger(trigger);
+        }
+    });
+
+    // 毎月1日の8時頃に実行
+    ScriptApp.newTrigger('sendMonthlyReport')
+        .timeBased()
+        .onMonthDay(1)
+        .atHour(8)
+        .create();
+
+    console.log("月次レポート(sendMonthlyReport)のトリガーを毎月1日の8時台に設定しました。");
+}
+
+/**
+ * 🚀 AI分析用の定期トリガーを一括で設定するマスター関数
+ * 初回セットアップ時や、トリガーを作り直したい時にエディタから手動実行してください。
+ */
+function setupAITriggers() {
+    setupWeeklyTrigger();
+    setupMonthlyTrigger();
+    console.log("AI分析用の定期トリガー(週次/月次)のセットアップが完了しました。");
+}
+
 
 /**
  * 📧 Gmailからクレジットカードの利用通知を取得してスプレッドシートへ自動記帳する
