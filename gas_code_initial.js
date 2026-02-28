@@ -1154,7 +1154,7 @@ function fetchGmailTransactions() {
     // 検索条件: 三井住友カード または PayPayカード で、未処理（ラベルなし等）のもの
     // 今回は簡易的に「過去1日分」かつ「特定の件名」で検索
     // 実際には専用ラベル "kakeibo-processed" 等を付けて既読管理するのが定石
-    const query = 'newer_than:2d (subject:"ご利用" OR subject:"カードご利用" OR subject:"カード利用のお知らせ") -label:kakeibo-processed';
+    const query = 'newer_than:7d (subject:"ご利用" OR subject:"カードご利用" OR subject:"カード利用のお知らせ") -label:kakeibo-processed';
     const threads = GmailApp.search(query, 0, 20); // 最大20スレッド
     if (threads.length === 0) {
         console.log("処理対象のメールはありません");
