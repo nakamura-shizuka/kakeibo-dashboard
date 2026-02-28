@@ -1200,12 +1200,14 @@ function fetchGmailTransactions() {
                     );
 
                     if (!isDuplicate) {
+                        const guessedCategory = guessCategory(record.memo);
+
                         // 過去のデータ構造（F列=Methodにカード名が入っていた）と互換性を持たせるため、Methodに record.account を指定する
                         // 第6引数(account)は空文字を渡して、自動追加時にG列とH列が空欄になり、旧データと見た目が完璧に揃うようにする
-                        writeToSpreadsheet(record.memo, record.amount, '未分類', record.account, record.date, "", '支出');
+                        writeToSpreadsheet(record.memo, record.amount, guessedCategory, record.account, record.date, "", '支出');
                         addCount++;
                         // 新規追加したものをexistingDataにも追加し、同一処理内の重複を防ぐ
-                        existingData.push([record.date, record.amount, '未分類', record.memo]);
+                        existingData.push([record.date, record.amount, guessedCategory, record.memo]);
                     } else {
                         console.log("重複のためスキップ:", record.date, record.amount, record.memo);
                     }
@@ -1338,6 +1340,55 @@ function parseCardEmail(subject, body, from) {
     }
 
     return records;
+}
+
+/**
+ * 🏷️ 店名（Memo）からカテゴリをざっくり推測する
+ */
+function guessCategory(memo) {
+    if (!memo) return '未分類';
+
+    const m = memo.toLowerCase();
+
+    // 食費
+    if (m.includes('セブン') || m.includes('ローソン') || m.includes('ファミリーマート') || m.includes('ファミマ') ||
+        m.includes('スーパー') || m.includes('イオン') || m.includes('イトーヨーカドー') || m.includes('西友') ||
+        m.includes('マクドナルド') || m.includes('スタバ') || m.includes('スターバックス') || m.includes('カフェ') ||
+        m.includes('すき家') || m.includes('吉野家') || m.includes('松屋') || m.includes('平和堂') || m.includes('coke') || m.includes('コカコーラ')) {
+        return '食費';
+    }
+    // 日用品
+    if (m.includes('マツモトキヨシ') || m.includes('ウエルシア') || m.includes('スギ薬局') || m.includes('ツルハ') ||
+        m.includes('ドラッグ') || m.includes('ニトリ') || m.includes('無印良品') || m.includes('ダイソー') || m.includes('セリア')) {
+        return '日用品';
+    }
+    // 交通費
+    if (m.includes('suica') || m.includes('pasmo') || m.includes('jr') || m.includes('メトロ') || m.includes('交通') ||
+        m.includes('タクシー') || m.includes('go') || m.includes('uber') || m.includes('タイムズ') || m.includes('etc')) {
+        return '交通費';
+    }
+    // 通信費
+    if (m.includes('docomo') || m.includes('ドコモ') || m.includes('au') || m.includes('softbank') || m.includes('ソフトバンク') ||
+        m.includes('uq') || m.includes('ymobile') || m.includes('ワイモバイル') || m.includes('apple') || m.includes('アップル') ||
+        m.includes('amazon web') || m.includes('aws') || m.includes('google')) {
+        return '通信費';
+    }
+    // 娯楽
+    if (m.includes('amazon') || m.includes('netflix') || m.includes('ネットフリックス') || m.includes('hulu') ||
+        m.includes('youtube') || m.includes('spotify') || m.includes('ディズニー') || m.includes('映画') || m.includes('任天堂') || m.includes('nintendo')) {
+        return '娯楽';
+    }
+    // 医療
+    if (m.includes('クリニック') || m.includes('病院') || m.includes('歯科') || m.includes('薬局')) {
+        return '医療';
+    }
+    // 衣服
+    if (m.includes('ユニクロ') || m.includes('uniqlo') || m.includes('gu') || m.includes('ジーユー') || m.includes('ゾゾ') || m.includes('zozo')) {
+        return '衣服';
+    }
+
+    // 判定できない場合は未分類
+    return '未分類';
 }
 
 /**
