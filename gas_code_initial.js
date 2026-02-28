@@ -1198,7 +1198,8 @@ function fetchGmailTransactions() {
                     );
 
                     if (!isDuplicate) {
-                        writeToSpreadsheet(record.memo, record.amount, '未分類', '自動(カード)', record.date, record.account, '支出');
+                        // 過去のデータ構造（F列=Methodにカード名が入っていた）と互換性を持たせるため、Methodに record.account を指定する
+                        writeToSpreadsheet(record.memo, record.amount, '未分類', record.account, record.date, record.account, '支出');
                         addCount++;
                         // 新規追加したものをexistingDataにも追加し、同一処理内の重複を防ぐ
                         existingData.push([record.date, record.amount, '未分類', record.memo]);
