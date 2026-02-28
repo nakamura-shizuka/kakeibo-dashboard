@@ -1240,12 +1240,12 @@ function parseCardEmail(subject, body, from) {
             /日時\s*[：:・]?\s*(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/,
             /(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})\s*にカードの利用/
         ];
-        // 複数の金額パターンに対応
+        // 複数の金額パターンに対応（マイナス記号も許可）
         const amountPatterns = [
-            /利用金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)\s*円/,
-            /ご利用金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)/,
-            /金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)\s*円/,
-            /[\\¥￥]([0-9,，]+)\s*のご利用/
+            /利用金額\s*[：:・]?\s*([\\¥￥\-ー－\s]*[0-9,，]+)\s*円/,
+            /ご利用金額\s*[：:・]?\s*([\\¥￥\-ー－\s]*[0-9,，]+)/,
+            /金額\s*[：:・]?\s*([\\¥￥\-ー－\s]*[0-9,，]+)\s*円/,
+            /[\\¥￥\-ー－\s]*([0-9,，]+)\s*のご利用/
         ];
         // 店名パターン (大幅強化)
         const shopPatterns = [
@@ -1259,7 +1259,9 @@ function parseCardEmail(subject, body, from) {
         if (dateMatch && amountMatch) {
             const d = new Date(dateMatch[1].replace(/-/g, '/'));
             const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
-            const amount = parseInt(amountMatch[1].replace(/[,，]/g, ''), 10);
+            // 金額テキストから数字とマイナス記号だけを抽出（例: "-80,800" -> "-80800"）
+            const cleanAmountStr = amountMatch[1].replace(/[^\d\-ー－]/g, '').replace(/[ー－]/g, '-');
+            const amount = parseInt(cleanAmountStr, 10);
             const memo = shopMatch ? shopMatch[1].trim().substring(0, 50) : '三井住友カード利用';
 
             records.push({ date: formattedDate, amount: amount, memo: memo, account: '三井住友カード' });
@@ -1277,8 +1279,8 @@ function parseCardEmail(subject, body, from) {
             /ご利用日\s*[：:・]?\s*(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/
         ];
         const amountPatterns = [
-            /利用金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)\s*円?/,
-            /金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)/
+            /利用金額\s*[：:・]?\s*([\\¥￥\-ー－\s]*[0-9,，]+)\s*円?/,
+            /金額\s*[：:・]?\s*([\\¥￥\-ー－\s]*[0-9,，]+)/
         ];
         // 店名パターン (大幅強化)
         const shopPatterns = [
@@ -1292,7 +1294,9 @@ function parseCardEmail(subject, body, from) {
         if (dateMatch && amountMatch) {
             const d = new Date(dateMatch[1].replace(/-/g, '/'));
             const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
-            const amount = parseInt(amountMatch[1].replace(/[,，]/g, ''), 10);
+            // 金額テキストから数字とマイナス記号だけを抽出
+            const cleanAmountStr = amountMatch[1].replace(/[^\d\-ー－]/g, '').replace(/[ー－]/g, '-');
+            const amount = parseInt(cleanAmountStr, 10);
             const memo = shopMatch ? shopMatch[1].trim().substring(0, 50) : 'PayPayカード利用';
 
             records.push({ date: formattedDate, amount: amount, memo: memo, account: 'PayPayカード' });
@@ -1307,12 +1311,14 @@ function parseCardEmail(subject, body, from) {
     // 三井住友/PayPay以外のカード（楽天、イオン等）や形式違いのメールをキャッチ
     else if (subject.includes('ご利用') || subject.includes('カード') || subject.includes('お知らせ')) {
         const dateMatch = body.match(/(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/);
-        const amountMatch = body.match(/[\\¥￥]?([0-9,，]{3,})\s*円/);
+        const amountMatch = body.match(/([\\¥￥\-ー－\s]*[0-9,，]{3,})\s*円/);
 
         if (dateMatch && amountMatch) {
             const d = new Date(dateMatch[1].replace(/-/g, '/'));
             const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
-            const amount = parseInt(amountMatch[1].replace(/[,，]/g, ''), 10);
+            // 金額テキストから数字とマイナス記号だけを抽出
+            const cleanAmountStr = amountMatch[1].replace(/[^\d\-ー－]/g, '').replace(/[ー－]/g, '-');
+            const amount = parseInt(cleanAmountStr, 10);
 
             // 店名を探す（汎用）
             const shopMatch = body.match(/(?:利用先|店名|加盟店)\s*[：:・]?\s*(.+)/);
