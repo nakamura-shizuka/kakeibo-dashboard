@@ -975,8 +975,8 @@ ${dailyStr}
   ${prevPeriodLabel}: ${previousPeriodExpense}円
   増減: ${currentPeriodExpense - previousPeriodExpense >= 0 ? '+' : ''}${currentPeriodExpense - previousPeriodExpense}円`;
 
-    // Gemini API リクエスト (Gemini 2.5 Flashを使用)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    // Gemini API リクエスト (Gemini 2.5 Proを使用)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`;
     const payload = {
         "contents": [
             { "role": "user", "parts": [{ "text": systemPrompt + "\n\n" + userPrompt }] }
