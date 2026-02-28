@@ -2497,7 +2497,7 @@
             if (btn) btn.disabled = true;
             if (loadingSpan) loadingSpan.style.display = 'inline';
             if (msgArea) msgArea.textContent = '過去のデータや予算設定から、専属アナリストが分析レポートを作成しています... (約10〜20秒かかります) 🤖💭';
-            card.style.display = 'block';
+            showCard('aiAdviceCard');
 
             if (!GAS_API_URL && typeof google === 'undefined') {
                 setTimeout(function () {
