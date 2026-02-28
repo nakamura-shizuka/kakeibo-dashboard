@@ -859,59 +859,131 @@ function generateAiAnalysis(isWeekly) {
         }
     });
 
-    // プロンプト用データの整形
-    const currentCatStr = Object.keys(currentCategoryMap).map(k => `・${k}: ${currentCategoryMap[k]}円`).join('\n') || "記録なし";
-    const prevCatStr = Object.keys(previousCategoryMap).map(k => `・${k}: ${previousCategoryMap[k]}円`).join('\n') || "記録なし";
+    // プロンプト用データの整形: カテゴリ別 前期比diff付き
+    const allCategories = new Set([...Object.keys(currentCategoryMap), ...Object.keys(previousCategoryMap)]);
+    const categoryDiffLines = [];
+    allCategories.forEach(cat => {
+        const curr = currentCategoryMap[cat] || 0;
+        const prev = previousCategoryMap[cat] || 0;
+        const diff = curr - prev;
+        const diffStr = diff > 0 ? `+${diff}円(↑)` : diff < 0 ? `${diff}円(↓)` : '±0';
+        const pctChange = prev > 0 ? Math.round((diff / prev) * 100) : (curr > 0 ? '+∞' : '0');
+        categoryDiffLines.push(`・${cat}: ${curr}円 (${prevPeriodLabel}: ${prev}円, 変動: ${diffStr}, ${pctChange}%)`);
+    });
+    const categoryAnalysisStr = categoryDiffLines.join('\n') || "記録なし";
+
+    // 日別支出推移データの構築
+    const dailyExpenses = {};
+    data.forEach(row => {
+        if (!row[0] || row[4] !== '支出') return;
+        const d = new Date(row[0]);
+        const amount = Number(row[1]) || 0;
+        if (isWeekly) {
+            const diffDays = Math.floor((now.getTime() - d.getTime()) / MS_PER_DAY);
+            if (diffDays >= 0 && diffDays < 7) {
+                const dayLabel = Utilities.formatDate(d, 'Asia/Tokyo', 'M/d(E)');
+                dailyExpenses[dayLabel] = (dailyExpenses[dayLabel] || 0) + amount;
+            }
+        } else {
+            const rYear = d.getFullYear();
+            const rMonth = d.getMonth();
+            if (rYear === currentYear && rMonth === currentMonth) {
+                const dayLabel = Utilities.formatDate(d, 'Asia/Tokyo', 'M/d');
+                dailyExpenses[dayLabel] = (dailyExpenses[dayLabel] || 0) + amount;
+            }
+        }
+    });
+    const dailyStr = Object.keys(dailyExpenses).sort().map(k => `  ${k}: ${dailyExpenses[k]}円`).join('\n') || "  記録なし";
 
     // 進行度（今月の場合）
     let budgetProgressStr = "";
+    let dailyAvgStr = "";
     if (!isWeekly) {
         const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
         const progressPercent = Math.round((currentDay / daysInMonth) * 100);
         const expensePercent = Math.round((currentPeriodExpense / monthlyBudget) * 100);
-        budgetProgressStr = `【月間予算】: ${monthlyBudget}円 (日数経過: ${progressPercent}%、予算消化: ${expensePercent}%)`;
+        const remainingDays = daysInMonth - currentDay;
+        const remainingBudget = monthlyBudget - currentPeriodExpense;
+        const dailyAvailable = remainingDays > 0 ? Math.round(remainingBudget / remainingDays) : 0;
+        budgetProgressStr = `【月間予算】: ${monthlyBudget}円\n  日数経過: ${currentDay}/${daysInMonth}日 (${progressPercent}%)\n  予算消化: ${currentPeriodExpense}/${monthlyBudget}円 (${expensePercent}%)\n  残り予算: ${remainingBudget}円 (残${remainingDays}日)`;
+        dailyAvgStr = `1日あたりの許容上限: ${dailyAvailable}円/日`;
+        if (currentDay > 0) {
+            const dailyPace = Math.round(currentPeriodExpense / currentDay);
+            const projectedTotal = dailyPace * daysInMonth;
+            dailyAvgStr += `\n  現在の日平均: ${dailyPace}円/日\n  このペースの月末予測: ${projectedTotal}円 (予算比 ${Math.round(projectedTotal / monthlyBudget * 100)}%)`;
+        }
     } else {
-        // 週次の場合は、月間予算の1/4を簡易目標とする
         const weeklyBudget = Math.floor(monthlyBudget / 4);
         const expensePercent = Math.round((currentPeriodExpense / weeklyBudget) * 100);
         budgetProgressStr = `【週次目安予算（月予算の1/4）】: ${weeklyBudget}円 (消化率: ${expensePercent}%)`;
+        if (Object.keys(dailyExpenses).length > 0) {
+            const dailyPace = Math.round(currentPeriodExpense / Object.keys(dailyExpenses).length);
+            dailyAvgStr = `日平均支出: ${dailyPace}円/日`;
+        }
     }
 
-    // Gemini へのシステムプロンプト（人格設定）
-    const systemPrompt = `
-あなたは優秀で冷徹な専属データアナリストです。
-家計簿のデータに基づき、感情を排して客観的かつ冷静に分析を行ってください。
-以下の要件に厳密に従って出力してください。
+    // 浪費ランキング（支出額上位3カテゴリ）
+    const sortedCats = Object.entries(currentCategoryMap).sort((a, b) => b[1] - a[1]);
+    const top3Str = sortedCats.slice(0, 3).map((c, i) => `  ${i + 1}位: ${c[0]} ${c[1]}円 (全体の${Math.round(c[1] / (currentPeriodExpense || 1) * 100)}%)`).join('\n');
 
-1. 感情的な言葉（「頑張りましょう」「残念ですね」等）や、絵文字、過剰な装飾は一切不要です。
-2. 提示された「${periodLabel}の支出」と「${prevPeriodLabel}の支出」、および予算データに基づいて、明確な事実のみを端的に述べること。
-3. 特に、先期からの出費の大幅な増加や、目安予算を超過している「浪費（使いすぎ）ポイント」があれば、カテゴリと金額を挙げて鋭く指摘すること。
-4. 全体として計画通りのペースか、それとも赤字ペースかを最後に結語として1〜2文で断定すること。
-5. 出力はMarkdownのリスト形式等を用い、スマホのLINEやWeb画面で読みやすく簡潔にまとめること（最大でも400文字程度）。
-`;
+    // Gemini へのシステムプロンプト（人格設定）
+    const systemPrompt = `あなたは10年以上の経験を持つ冷徹なファイナンシャルアナリストです。
+家計簿データに基づき、感情を排して鋭く客観的な分析レポートを作成してください。
+
+## 出力フォーマット（厳守）
+
+### 📊 概況
+予算に対する進捗と、前期比較の要約を2〜3文で。
+
+### 🔍 カテゴリ別診断
+前期比で増加が顕著なカテゴリを**金額と増加率つき**で指摘。
+減少したカテゴリがあればそれも記載。
+
+### ⚠️ 浪費アラート
+支出上位カテゴリの中で「削減余地がある」ものを特定し、
+**具体的にいくら削れば予算内に収まるか**を金額で提示。
+
+### 📈 ペース診断
+日次の支出ペースから月末の着地予測を計算し、
+予算内に収まるかどうかを断定。
+
+### 💡 アクション提案
+残りの期間で予算内に着地するための**具体的な行動**を2〜3個、箇条書きで。
+
+## ルール
+- 絵文字はセクション見出しのみ使用可。本文には不要。
+- 「頑張りましょう」等の応援は不要。事実と数字のみ。
+- 全体で600〜800文字程度。`;
 
     // ユーザープロンプト（データ入力）
-    const userPrompt = `
-以下の家計データから分析レポートを作成してください。
+    const userPrompt = `以下の家計データから分析レポートを作成してください。
 
 ${budgetProgressStr}
+${dailyAvgStr}
 
-■ ${prevPeriodLabel}の支出合計: ${previousPeriodExpense}円
-${prevCatStr}
+■ カテゴリ別支出（${periodLabel} vs ${prevPeriodLabel}）
+${categoryAnalysisStr}
 
-■ ${periodLabel}の支出合計: ${currentPeriodExpense}円
-${currentCatStr}
-`;
+■ 支出額ランキング（${periodLabel}）
+${top3Str || "  データなし"}
 
-    // Gemini API リクエスト (Gemini 2.5 Flashを使用)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+■ 日別支出推移（${periodLabel}）
+${dailyStr}
+
+■ 合計
+  ${periodLabel}: ${currentPeriodExpense}円
+  ${prevPeriodLabel}: ${previousPeriodExpense}円
+  増減: ${currentPeriodExpense - previousPeriodExpense >= 0 ? '+' : ''}${currentPeriodExpense - previousPeriodExpense}円`;
+
+    // Gemini API リクエスト (Gemini 2.0 Flashを使用)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
     const payload = {
         "contents": [
             { "role": "user", "parts": [{ "text": systemPrompt + "\n\n" + userPrompt }] }
         ],
         "generationConfig": {
-            "temperature": 0.2, // 冷静・客観的にするため低めに設定
-            "maxOutputTokens": 800
+            "temperature": 0.3,
+            "maxOutputTokens": 1500
         }
     };
 
@@ -959,14 +1031,9 @@ function getAiAnalysis(isWeekly) {
  * ⏰ 定期実行トリガー用：週次レポート送信（毎週日曜の夕方などを想定）
  */
 function sendWeeklyReport() {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const settingsSheet = ss.getSheetByName('設定');
-    if (!settingsSheet) return;
-
-    // F3cel='LINE_USER_ID', G3cel=UserID
-    const userId = settingsSheet.getRange('G3').getValue();
+    const userId = getLineUserId_();
     if (!userId) {
-        console.warn("LINE_USER_IDが設定されていないため、通知をスキップしました。LINEからBotへ一度メッセージを送ってください。");
+        console.warn("LINE_USER_IDが設定されていないため、通知をスキップしました。\n対処法: (1) LINEからBotへ一度メッセージを送る、または (2) GASのスクリプトプロパティに LINE_USER_ID を手動設定してください。");
         return;
     }
 
@@ -974,28 +1041,52 @@ function sendWeeklyReport() {
     const message = "📊 【みえる化家計簿】週次データ分析レポート\n\n" + analysisResult;
 
     pushLineMessage(userId, message);
+    console.log("週次レポートをLINEに送信しました (userId: " + userId.substring(0, 8) + "...)");
 }
 
 /**
  * ⏰ 定期実行トリガー用：月次レポート送信（毎月1日の朝などを想定）
  */
 function sendMonthlyReport() {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const settingsSheet = ss.getSheetByName('設定');
-    if (!settingsSheet) return;
+    const userId = getLineUserId_();
+    if (!userId) {
+        console.warn("LINE_USER_IDが設定されていないため、月次通知をスキップしました。");
+        return;
+    }
 
-    const userId = settingsSheet.getRange('G3').getValue();
-    if (!userId) return;
-
-    // 月次は前月分の振り返りをしたいケースが多いため、月初実行時（1日）は事実上、
-    // currentMonthの「1日分のデータ」と前月の比較になってしまう。
-    // そのため、1日〜3日の間に直近30日間として分析するなどロジックの調整が必要だが、
-    // ここでは MVP として、そのまま generateAiAnalysis(false) を呼ぶ。
-    // （※ generateAiAnalysis 内で、今月vs先月の比較を行っている）
     const analysisResult = generateAiAnalysis(false); // 月次
     const message = "📈 【みえる化家計簿】月次データ分析レポート\n\n" + analysisResult;
 
     pushLineMessage(userId, message);
+    console.log("月次レポートをLINEに送信しました");
+}
+
+/**
+ * 🔑 LINE_USER_IDを取得するヘルパー（設定シート → スクリプトプロパティの順でフォールバック）
+ */
+function getLineUserId_() {
+    // 1. スプレッドシートの設定シートから取得
+    try {
+        if (SPREADSHEET_ID) {
+            const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+            const settingsSheet = ss.getSheetByName('設定');
+            if (settingsSheet) {
+                const userId = settingsSheet.getRange('G3').getValue();
+                if (userId) return userId.toString().trim();
+            }
+        }
+    } catch (e) {
+        console.warn("設定シートからLINE_USER_ID取得失敗:", e.message);
+    }
+
+    // 2. スクリプトプロパティからフォールバック
+    const propId = (PROPERTIES.getProperty('LINE_USER_ID') || "").trim();
+    if (propId) {
+        console.log("スクリプトプロパティからLINE_USER_IDを取得しました");
+        return propId;
+    }
+
+    return null;
 }
 
 /**
@@ -1063,7 +1154,7 @@ function fetchGmailTransactions() {
     // 検索条件: 三井住友カード または PayPayカード で、未処理（ラベルなし等）のもの
     // 今回は簡易的に「過去1日分」かつ「特定の件名」で検索
     // 実際には専用ラベル "kakeibo-processed" 等を付けて既読管理するのが定石
-    const query = 'newer_than:1d (subject:"ご利用の確認" OR subject:"カードご利用のお知らせ" OR subject:"PayPayカードのご利用確認") -label:kakeibo-processed';
+    const query = 'newer_than:2d (subject:"ご利用" OR subject:"カードご利用" OR subject:"カード利用のお知らせ") -label:kakeibo-processed';
     const threads = GmailApp.search(query, 0, 20); // 最大20スレッド
     if (threads.length === 0) {
         console.log("処理対象のメールはありません");
@@ -1131,61 +1222,125 @@ function fetchGmailTransactions() {
  */
 function parseCardEmail(subject, body, from) {
     const records = [];
+    console.log(`parseCardEmail: from=${from}, subject=${subject}`);
 
-    // 1. 三井住友カード (ご利用のお知らせ)
-    if (from.includes('vpass.ne.jp') && subject.includes('ご利用のお知らせ')) {
-        // 利用日: 2024/02/25 のようなフォーマットを想定
-        const dateMatch = body.match(/利用日\s*[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/);
-        // 利用金額: 1,234円 のようなフォーマットを想定
-        const amountMatch = body.match(/利用金額\s*[：:]\s*([0-9,]+)円/);
-        // 利用店名: Amazon.co.jp のようなフォーマット
-        const shopMatch = body.match(/利用店名・商品名\s*[：:]\s*(.+)/);
+    // --- 1. 三井住友カード ---
+    // 送信元: vpass.ne.jp / smbc-card.com / mail.smbc-card.com 等
+    if ((from.includes('vpass.ne.jp') || from.includes('smbc-card')) &&
+        (subject.includes('ご利用') || subject.includes('確認'))) {
+
+        // 複数の日付パターンに対応
+        const datePatterns = [
+            /利用日\s*[：:・]?\s*(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/,
+            /ご利用日\s*[：:・]?\s*(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/,
+            /日時\s*[：:・]?\s*(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/,
+            /(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})\s*にカードの利用/
+        ];
+        // 複数の金額パターンに対応
+        const amountPatterns = [
+            /利用金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)\s*円/,
+            /ご利用金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)/,
+            /金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)\s*円/,
+            /[\\¥￥]([0-9,，]+)\s*のご利用/
+        ];
+        // 店名パターン
+        const shopPatterns = [
+            /利用店名[・等]*\s*[：:・]?\s*(.+)/,
+            /ご利用先\s*[：:・]?\s*(.+)/,
+            /お店[（(]?名[）)]?\s*[：:・]?\s*(.+)/
+        ];
+
+        const dateMatch = tryPatterns_(body, datePatterns);
+        const amountMatch = tryPatterns_(body, amountPatterns);
+        const shopMatch = tryPatterns_(body, shopPatterns);
 
         if (dateMatch && amountMatch) {
-            const dateStr = dateMatch[1];
-            // 日付を「YYYY/MM/DD」フォーマットに（月日のゼロ埋めなどを統一する場合はここで処理）
-            const d = new Date(dateStr);
+            const d = new Date(dateMatch[1].replace(/-/g, '/'));
             const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
+            const amount = parseInt(amountMatch[1].replace(/[,，]/g, ''), 10);
+            const memo = shopMatch ? shopMatch[1].trim().substring(0, 50) : '三井住友カード利用';
 
-            const amount = parseInt(amountMatch[1].replace(/,/g, ''), 10);
-            const memo = shopMatch ? shopMatch[1].trim() : '三井住友カード利用';
-
-            records.push({
-                date: formattedDate,
-                amount: amount,
-                memo: memo,
-                account: '三井住友カード'
-            });
+            records.push({ date: formattedDate, amount: amount, memo: memo, account: '三井住友カード' });
+            console.log(`  → 三井住友: ${formattedDate} ${amount}円 ${memo}`);
+        } else {
+            console.warn(`  三井住友カード: パース失敗 (date=${!!dateMatch}, amount=${!!amountMatch})`);
+            console.log(`  本文先頭200文字: ${body.substring(0, 200)}`);
         }
     }
 
-    // 2. PayPayカード
-    else if (from.includes('paypay-card.co.jp') && subject.includes('ご利用確認')) {
-        // 利用日時：2024/02/25 10:20:30
-        const dateMatch = body.match(/利用日時\s*[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/);
-        // 利用金額：1,234円
-        const amountMatch = body.match(/利用金額\s*[：:]\s*([0-9,]+)円/);
-        // 利用店名等：PayPay決済
-        const shopMatch = body.match(/利用店名等\s*[：:]\s*(.+)/);
+    // --- 2. PayPayカード ---
+    else if (from.includes('paypay') && (subject.includes('ご利用') || subject.includes('確認'))) {
+        const datePatterns = [
+            /利用日時?\s*[：:・]?\s*(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/,
+            /ご利用日\s*[：:・]?\s*(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/
+        ];
+        const amountPatterns = [
+            /利用金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)\s*円?/,
+            /金額\s*[：:・]?\s*[\\¥￥]?([0-9,，]+)/
+        ];
+        const shopPatterns = [
+            /利用店名等?\s*[：:・]?\s*(.+)/,
+            /ご利用先\s*[：:・]?\s*(.+)/
+        ];
+
+        const dateMatch = tryPatterns_(body, datePatterns);
+        const amountMatch = tryPatterns_(body, amountPatterns);
+        const shopMatch = tryPatterns_(body, shopPatterns);
 
         if (dateMatch && amountMatch) {
-            const d = new Date(dateMatch[1]);
+            const d = new Date(dateMatch[1].replace(/-/g, '/'));
             const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
-            const amount = parseInt(amountMatch[1].replace(/,/g, ''), 10);
-            const memo = shopMatch ? shopMatch[1].trim() : 'PayPayカード利用';
+            const amount = parseInt(amountMatch[1].replace(/[,，]/g, ''), 10);
+            const memo = shopMatch ? shopMatch[1].trim().substring(0, 50) : 'PayPayカード利用';
 
-            records.push({
-                date: formattedDate,
-                amount: amount,
-                memo: memo,
-                account: 'PayPayカード'
-            });
+            records.push({ date: formattedDate, amount: amount, memo: memo, account: 'PayPayカード' });
+            console.log(`  → PayPay: ${formattedDate} ${amount}円 ${memo}`);
+        } else {
+            console.warn(`  PayPayカード: パース失敗`);
+            console.log(`  本文先頭200文字: ${body.substring(0, 200)}`);
         }
     }
 
-    // 必要に応じて他カードの正規表現を追加（楽天カード等）
+    // --- 3. 汎用カード通知フォールバック ---
+    // 三井住友/PayPay以外のカード（楽天、イオン等）や形式違いのメールをキャッチ
+    else if (subject.includes('ご利用') || subject.includes('カード') || subject.includes('お知らせ')) {
+        const dateMatch = body.match(/(\d{4}[\/-]\d{1,2}[\/-]\d{1,2})/);
+        const amountMatch = body.match(/[\\¥￥]?([0-9,，]{3,})\s*円/);
+
+        if (dateMatch && amountMatch) {
+            const d = new Date(dateMatch[1].replace(/-/g, '/'));
+            const formattedDate = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
+            const amount = parseInt(amountMatch[1].replace(/[,，]/g, ''), 10);
+
+            // 店名を探す（汎用）
+            const shopMatch = body.match(/(?:利用先|店名|加盟店)\s*[：:・]?\s*(.+)/);
+            const memo = shopMatch ? shopMatch[1].trim().substring(0, 50) : subject.substring(0, 30);
+
+            // fromからカード名を推定
+            let account = 'その他カード';
+            if (from.includes('rakuten')) account = '楽天カード';
+            else if (from.includes('aeon')) account = 'イオンカード';
+            else if (from.includes('saison')) account = 'セゾンカード';
+
+            records.push({ date: formattedDate, amount: amount, memo: memo, account: account });
+            console.log(`  → 汎用: ${formattedDate} ${amount}円 ${memo} (${account})`);
+        } else {
+            console.log(`  汎用フォールバック: パース失敗 - subject=${subject}`);
+        }
+    }
 
     return records;
+}
+
+/**
+ * 🔧 複数の正規表現パターンを順番に試し、最初にマッチしたものを返すヘルパー
+ */
+function tryPatterns_(text, patterns) {
+    for (let i = 0; i < patterns.length; i++) {
+        const match = text.match(patterns[i]);
+        if (match) return match;
+    }
+    return null;
 }
 
 /**
