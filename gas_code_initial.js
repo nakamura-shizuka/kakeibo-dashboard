@@ -199,9 +199,11 @@ function writeToSpreadsheet(memo, amount, category, method, dateStrInput, accoun
     }
 
     const dateStr = dateStrInput || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM/dd");
-    const accountName = account || '未設定';
+    const accountName = account || '';
     const entryType = entryTypeInput || '支出';
-    sheet.appendRow([dateStr, amount, category || '未分類', memo, entryType, method || 'LINE手入力', false, accountName]);
+    const isFixedVal = account ? false : ""; // ダッシュボードからの追加時など口座情報がある場合のみfalse、Gmail等の自動取込は空文字にして旧データと見た目を揃える
+
+    sheet.appendRow([dateStr, amount, category || '未分類', memo, entryType, method || 'LINE手入力', isFixedVal, accountName]);
 }
 
 /**
@@ -1199,7 +1201,8 @@ function fetchGmailTransactions() {
 
                     if (!isDuplicate) {
                         // 過去のデータ構造（F列=Methodにカード名が入っていた）と互換性を持たせるため、Methodに record.account を指定する
-                        writeToSpreadsheet(record.memo, record.amount, '未分類', record.account, record.date, record.account, '支出');
+                        // 第6引数(account)は空文字を渡して、自動追加時にG列とH列が空欄になり、旧データと見た目が完璧に揃うようにする
+                        writeToSpreadsheet(record.memo, record.amount, '未分類', record.account, record.date, "", '支出');
                         addCount++;
                         // 新規追加したものをexistingDataにも追加し、同一処理内の重複を防ぐ
                         existingData.push([record.date, record.amount, '未分類', record.memo]);
