@@ -1456,7 +1456,7 @@
             var arc = d3.arc()
                 .innerRadius(innerRadius)
                 .outerRadius(radius)
-                .cornerRadius(4);
+                .cornerRadius(0);
 
             var total = d3.sum(categories, function (d) { return d.amount; });
 
