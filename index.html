@@ -1446,10 +1446,12 @@
                 .domain(categories.map(function (d) { return d.name; }))
                 .range(COLORS);
 
+            // 有効なカテゴリ（金額が0より大きい）が1つだけの場合、padAngleを0にして完全な円を描画する
+            var activeCategories = categories.filter(function (d) { return d.amount > 0; }).length;
             var pie = d3.pie()
                 .value(function (d) { return d.amount; })
                 .sort(null)
-                .padAngle(0.03);
+                .padAngle(activeCategories <= 1 ? 0 : 0.03);
 
             var arc = d3.arc()
                 .innerRadius(innerRadius)
