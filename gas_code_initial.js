@@ -1783,7 +1783,9 @@ function parseCardEmail_(subject, body, sender) {
  * ✅ 解析済みレコードをスプレッドシートへ書き込む（重複チェック付き）
  */
 function writeCardRecord_(sheet, record) {
-    // 重複チェック: 同じ日付+金額+摘要の組み合わせが既に存在する場合はスキップ
+    // 重複チェック: 同じ日付+金額+Method(F列)の組み合わせが既に存在する場合はスキップ
+    // ※ C列(カテゴリ)やD列(店名)をユーザーが手動編集しても重複が発生しないよう、
+    //   ユーザーが通常編集しないF列(Method)を判定に使用する
     const lastRow = Math.max(sheet.getLastRow(), 1);
     if (lastRow > 1) {
         const existingData = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
@@ -1792,8 +1794,8 @@ function writeCardRecord_(sheet, record) {
                 ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy/MM/dd')
                 : String(row[0]).substring(0, 10);
             const existingAmount = Number(row[1]);
-            const existingMemo = String(row[3]);
-            if (existingDate === record.date && existingAmount === record.amount && existingMemo === record.memo) {
+            const existingMethod = String(row[5]); // F列 = Method
+            if (existingDate === record.date && existingAmount === record.amount && existingMethod === record.method) {
                 return false; // 重複のためスキップ
             }
         }
