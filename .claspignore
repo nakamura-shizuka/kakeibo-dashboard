@@ -1,6 +1,6 @@
 docs/**
 node_modules/**
 .git/**
-build.js
 package.json
 package-lock.json
+# build.js はGAS上でスタブとして存在（Node.js用の本物はここにある）
