@@ -93,7 +93,7 @@ function setupAITriggers() {
  * ⏰ 日次トリガーを設定する
  * - autoRecordFixedExpenses: 毎日06時（固定費自動記録）
  * - checkBudgetAndAlert: 毎日08時（予算アラート）
- * - dailyFetchCardEmails: 毎日07時（Gmail カード明細取込）
+ * - dailyFetchCardEmails: 1時間ごと（Gmail カード明細取込）
  */
 function setupDailyTrigger() {
     const dailyFunctions = ['autoRecordFixedExpenses', 'checkBudgetAndAlert', 'dailyFetchCardEmails'];
@@ -106,10 +106,10 @@ function setupDailyTrigger() {
     });
 
     ScriptApp.newTrigger('autoRecordFixedExpenses').timeBased().everyDays(1).atHour(6).create();
-    ScriptApp.newTrigger('dailyFetchCardEmails').timeBased().everyDays(1).atHour(7).create();
+    ScriptApp.newTrigger('dailyFetchCardEmails').timeBased().everyHours(1).create(); // 毎時取込（当日中に反映）
     ScriptApp.newTrigger('checkBudgetAndAlert').timeBased().everyDays(1).atHour(8).create();
 
-    console.log("日次トリガー（固定費記録: 6時, Gmail取込: 7時, 予算アラート: 8時）を設定しました。");
+    console.log("トリガー設定完了（固定費記録: 毎日6時, Gmail取込: 毎時, 予算アラート: 毎日8時）");
 }
 
 /**
