@@ -216,37 +216,6 @@
                 renderRecords(data.recentRecords);
             }
 
-            // 資産残高リストの描画
-            const balList = document.getElementById('balanceList');
-            balList.innerHTML = '';
-            let totalBal = 0;
-            let hasBalance = false;
-
-            if (data.accountBalances && Object.keys(data.accountBalances).length > 0) {
-                for (let accName in data.accountBalances) {
-                    hasBalance = true;
-                    let balance = data.accountBalances[accName];
-                    totalBal += balance;
-
-                    let color = balance < 0 ? 'var(--danger)' : 'var(--text-primary)';
-                    let rowHtml = `
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">
-                            <span style="font-size:0.95rem; font-weight:700; color:var(--text-secondary);">${escapeHtml(accName)}</span>
-                            <span style="font-weight:700; font-size:1.1rem; color:${color};">¥${balance.toLocaleString()}</span>
-                        </div>
-                    `;
-                    balList.insertAdjacentHTML('beforeend', rowHtml);
-                }
-            }
-
-            if (hasBalance) {
-                let sumColor = totalBal < 0 ? 'var(--danger)' : 'var(--accent)';
-                document.getElementById('totalBalance').innerHTML = '合計: <span style="color:' + sumColor + '">¥' + totalBal.toLocaleString() + '</span>';
-                showCard('balanceCard');
-            } else {
-                document.getElementById('balanceCard').style.display = 'none';
-            }
-
             // サンキーダイアグラム（別APIで取得）
             if (GAS_API_URL) {
                 callGAS('getSankeyData', { year: currentYear, month: currentMonth })

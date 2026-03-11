@@ -19,14 +19,14 @@
                 displayDiv.style.cssText = 'display:flex; align-items:center; width:100%; gap:10px;';
                 displayDiv.innerHTML =
                     '<div class="record-icon" style="background: ' + bgColor + '22">' + icon + '</div>' +
-                    '<div class="record-info" style="flex:1; min-width:0;">' +
+                    '<div class="record-info" style="flex:1; min-width:0; word-break:break-word;">' +
                     '  <div class="record-memo">' + escapeHtml(rec.memo) + '</div>' +
                     '  <div class="record-meta">' + escapeHtml(rec.date) + ' · ' + escapeHtml(rec.category) + ' · ' + escapeHtml(rec.method || '') + '</div>' +
                     '</div>' +
                     '<div class="record-amount ' + (rec.type === '収入' ? 'income' : 'expense') + '" style="white-space:nowrap;">' +
                     (rec.type === '収入' ? '+' : '-') + '¥' + rec.amount.toLocaleString() +
                     '</div>' +
-                    '<div style="font-size:0.7rem; color:var(--text-muted); margin-left:4px;">✏️</div>';
+                    '<div style="font-size:0.7rem; color:var(--text-muted); margin-left:4px; flex-shrink:0;">✏️</div>';
 
                 // 編集フォーム（初期は非表示）
                 var editDiv = document.createElement('div');
@@ -39,7 +39,7 @@
                 if (catOptions.indexOf('返金') < 0) catOptions.push('返金');
 
                 // カテゴリチップを生成
-                var chipsHtml = '<div style="margin-bottom:6px; font-size:0.7rem; color:var(--text-muted);">🏷️ カテゴリを選択（タップで即保存）</div>';
+                var chipsHtml = '<div style="margin-bottom:6px; font-size:0.7rem; color:var(--text-muted);">🏷️ カテゴリを選択</div>';
                 chipsHtml += '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">';
                 catOptions.forEach(function (cat) {
                     var isActive = cat === rec.category;
@@ -54,12 +54,18 @@
                 });
                 chipsHtml += '</div>';
 
-                // メモ編集行
-                chipsHtml += '<div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">' +
+                // メモ編集行（min-width削除、word-break追加）
+                chipsHtml += '<div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:10px;">' +
                     '<label style="flex: 0 0 auto; font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">✏️ 品名:</label>' +
-                    '<input type="text" class="edit-memo-input input-field" value="' + escapeHtml(rec.memo) + '" style="flex: 1 1 120px; min-width:120px; font-size:0.8rem; padding:6px 8px;">' +
-                    '<button class="edit-memo-save" style="-webkit-appearance:none; flex: 0 0 auto; font-size:0.7rem; padding:6px 12px; border-radius:16px; border:none; background:var(--accent); color:#fff; cursor:pointer;">変更</button>' +
+                    '<input type="text" class="edit-memo-input input-field" value="' + escapeHtml(rec.memo) + '" ' +
+                    'style="flex: 1 1 0; min-width:0; font-size:0.8rem; padding:6px 8px;" ' +
+                    'onkeydown="if(event.key===\'Enter\'){event.preventDefault();}">' +
                     '</div>';
+
+                // 保存ボタン（カテゴリ・品名を一括保存）
+                chipsHtml += '<button class="edit-save-btn" style="' +
+                    '-webkit-appearance:none; width:100%; font-size:0.8rem; padding:8px; border-radius:16px; border:none; ' +
+                    'background:var(--accent); color:#fff; cursor:pointer; font-weight:700;">保存</button>';
 
                 editDiv.innerHTML = chipsHtml;
 
@@ -69,20 +75,18 @@
                 // クリックで編集フォームをトグル
                 displayDiv.addEventListener('click', function () {
                     var wasVisible = editDiv.style.display !== 'none';
-                    // 他の編集フォームを全て閉じる
                     document.querySelectorAll('.record-edit-form').forEach(function (f) { f.style.display = 'none'; });
                     if (!wasVisible) editDiv.style.display = 'block';
                 });
 
-                // カテゴリチップのクリック → 即保存
+                // カテゴリチップのクリック → 視覚的選択のみ（即保存しない）
                 (function (ri, ed, recObj) {
+                    var currentCat = recObj.category;
+
                     ed.querySelectorAll('.cat-chip').forEach(function (chip) {
                         chip.addEventListener('click', function (e) {
                             e.stopPropagation();
-                            var newCat = this.getAttribute('data-cat');
-                            if (newCat === recObj.category) return; // 変更なし
-
-                            // 見た目を即座に更新
+                            currentCat = this.getAttribute('data-cat');
                             ed.querySelectorAll('.cat-chip').forEach(function (c) {
                                 c.style.border = '1px solid var(--border-card)';
                                 c.style.background = 'transparent';
@@ -93,57 +97,60 @@
                             this.style.background = 'var(--accent)';
                             this.style.color = '#fff';
                             this.style.fontWeight = '700';
-
-                            if (!GAS_API_URL) {
-                                showToast('✅ (モック) カテゴリを「' + newCat + '」に変更');
-                                return;
-                            }
-
-                            showToast('💾 保存中...');
-                            callGAS('updateRecord', { rowIndex: ri, category: newCat })
-                                .then(function (result) {
-                                    if (result.success) {
-                                        showToast('✅ カテゴリを「' + newCat + '」に変更しました');
-                                        recObj.category = newCat;
-                                        var newIcon = CATEGORY_ICONS[newCat] || '📦';
-                                        displayDiv.querySelector('.record-icon').innerHTML = newIcon;
-                                        displayDiv.querySelector('.record-meta').textContent = recObj.date + ' · ' + newCat + ' · ' + (recObj.method || '');
-                                        setTimeout(function () { loadData(currentYear, currentMonth); }, 800);
-                                    } else {
-                                        showToast('❌ ' + result.message, true);
-                                    }
-                                })
-                                .catch(function (err) {
-                                    showToast('❌ 通信エラー', true);
-                                });
                         });
                     });
 
-                    // メモ変更ボタン
-                    ed.querySelector('.edit-memo-save').addEventListener('click', function (e) {
+                    // 保存ボタン → カテゴリ＋品名を一括保存
+                    var saveBtn = ed.querySelector('.edit-save-btn');
+                    saveBtn.addEventListener('click', function (e) {
                         e.stopPropagation();
                         var newMemo = ed.querySelector('.edit-memo-input').value.trim();
-                        if (newMemo === recObj.memo) { showToast('変更がありません'); return; }
+                        var catChanged = currentCat !== recObj.category;
+                        var memoChanged = newMemo !== recObj.memo;
 
-                        if (!GAS_API_URL) {
-                            showToast('✅ (モック) 品名を変更しました');
+                        if (!catChanged && !memoChanged) {
+                            showToast('変更がありません');
                             return;
                         }
 
-                        this.textContent = '...';
+                        if (!GAS_API_URL) {
+                            showToast('✅ (モック) 変更を保存しました');
+                            return;
+                        }
+
                         var btn = this;
-                        callGAS('updateRecord', { rowIndex: ri, memo: newMemo })
+                        btn.textContent = '保存中...';
+                        btn.disabled = true;
+
+                        var params = { rowIndex: ri };
+                        if (catChanged) params.category = currentCat;
+                        if (memoChanged) params.memo = newMemo;
+
+                        callGAS('updateRecord', params)
                             .then(function (result) {
-                                btn.textContent = '変更';
+                                btn.textContent = '保存';
+                                btn.disabled = false;
                                 if (result.success) {
-                                    showToast('✅ 品名を変更しました');
-                                    recObj.memo = newMemo;
-                                    displayDiv.querySelector('.record-memo').textContent = escapeHtml(newMemo);
+                                    showToast('✅ 変更を保存しました');
+                                    if (catChanged) {
+                                        recObj.category = currentCat;
+                                        var newIcon = CATEGORY_ICONS[currentCat] || '📦';
+                                        displayDiv.querySelector('.record-icon').innerHTML = newIcon;
+                                        displayDiv.querySelector('.record-meta').textContent = recObj.date + ' · ' + currentCat + ' · ' + (recObj.method || '');
+                                    }
+                                    if (memoChanged) {
+                                        recObj.memo = newMemo;
+                                        displayDiv.querySelector('.record-memo').textContent = newMemo;
+                                    }
+                                    editDiv.style.display = 'none';
                                     setTimeout(function () { loadData(currentYear, currentMonth); }, 800);
-                                } else { showToast('❌ ' + result.message, true); }
+                                } else {
+                                    showToast('❌ ' + result.message, true);
+                                }
                             })
                             .catch(function () {
-                                btn.textContent = '変更';
+                                btn.textContent = '保存';
+                                btn.disabled = false;
                                 showToast('❌ 通信エラー', true);
                             });
                     });

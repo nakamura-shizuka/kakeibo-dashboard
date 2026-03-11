@@ -9,15 +9,34 @@
  * @param {number} targetYear - 対象年 (例: 2026) 省略時は現在年
  * @param {number} targetMonth - 対象月 (0-11) 省略時は現在月
  */
+/**
+ * 🗑️ ダッシュボードキャッシュを無効化する
+ * データ更新後（addExpense, updateRecord）に呼び出す
+ */
+function invalidateDashboardCache(year, month) {
+    const cache = CacheService.getScriptCache();
+    cache.remove('dashboard_' + year + '_' + month);
+    cache.remove('sankey_' + year + '_' + month);
+    cache.remove('yearly_' + year);
+}
+
 function getDashboardData(targetYear, targetMonth) {
     if (!SPREADSHEET_ID) return { error: "SPREADSHEET_ID未設定" };
-
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('家計簿');
 
     const now = new Date();
     const currentYear = targetYear !== undefined ? targetYear : now.getFullYear();
     const currentMonth = targetMonth !== undefined ? targetMonth : now.getMonth();
+
+    // キャッシュチェック（5分間）
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'dashboard_' + currentYear + '_' + currentMonth;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        try { return JSON.parse(cached); } catch (e) { /* キャッシュ破損時は再取得 */ }
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('家計簿');
 
     if (!sheet || sheet.getLastRow() <= 1) {
         return {
@@ -148,7 +167,7 @@ function getDashboardData(targetYear, targetMonth) {
         }
     } catch (e) { console.warn('AIメッセージ取得失敗:', e.message); }
 
-    return {
+    const result = {
         totalSpending: totalSpending,
         totalIncome: totalIncome,
         carryOver: carryOver,
@@ -156,9 +175,10 @@ function getDashboardData(targetYear, targetMonth) {
         categories: categories,
         recentRecords: recentRecords,
         aiMessage: aiMessage,
-        accountBalances: accountBalances,
         monthLabel: currentYear + "年" + (currentMonth + 1) + "月"
     };
+    try { cache.put(cacheKey, JSON.stringify(result), 300); } catch (e) { /* データが大きすぎる場合はスキップ */ }
+    return result;
 }
 
 /**
@@ -167,14 +187,22 @@ function getDashboardData(targetYear, targetMonth) {
 function getSankeyData(targetYear, targetMonth) {
     if (!SPREADSHEET_ID) return { flows: [] };
 
+    const now = new Date();
+    const currentYear = targetYear !== undefined ? targetYear : now.getFullYear();
+    const currentMonth = targetMonth !== undefined ? targetMonth : now.getMonth();
+
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'sankey_' + currentYear + '_' + currentMonth;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        try { return JSON.parse(cached); } catch (e) { }
+    }
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName('家計簿');
     if (!sheet || sheet.getLastRow() <= 1) return { flows: [] };
 
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
-    const now = new Date();
-    const currentYear = targetYear !== undefined ? targetYear : now.getFullYear();
-    const currentMonth = targetMonth !== undefined ? targetMonth : now.getMonth();
 
     const thisMonthData = data.filter(function (row) {
         if (!row[0]) return false;
@@ -212,13 +240,15 @@ function getSankeyData(targetYear, targetMonth) {
         flows.push([sourceLabel, '残高', remaining]);
     }
 
-    return {
+    const sankeyResult = {
         flows: flows,
         totalIncome: totalIncome,
         totalSpending: totalSpending,
         sourceLabel: sourceLabel,
         sourceAmount: sourceAmount
     };
+    try { cache.put(cacheKey, JSON.stringify(sankeyResult), 600); } catch (e) { }
+    return sankeyResult;
 }
 
 /**
@@ -227,10 +257,18 @@ function getSankeyData(targetYear, targetMonth) {
 function getYearlyReportData(targetYear) {
     if (!SPREADSHEET_ID) return { error: "SPREADSHEET_ID未設定" };
 
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('家計簿');
     const now = new Date();
     const currentYear = targetYear !== undefined ? targetYear : now.getFullYear();
+
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'yearly_' + currentYear;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        try { return JSON.parse(cached); } catch (e) { }
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('家計簿');
 
     if (!sheet || sheet.getLastRow() <= 1) {
         return { year: currentYear, monthlyData: [] };
@@ -273,5 +311,7 @@ function getYearlyReportData(targetYear) {
         m.cumulativeSavings = cumulative;
     });
 
-    return { year: currentYear, monthlyData: monthlyData };
+    const yearlyResult = { year: currentYear, monthlyData: monthlyData };
+    try { cache.put(cacheKey, JSON.stringify(yearlyResult), 600); } catch (e) { }
+    return yearlyResult;
 }

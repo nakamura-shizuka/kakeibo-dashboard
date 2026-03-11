@@ -90,6 +90,39 @@ function setupAITriggers() {
 }
 
 /**
+ * ⏰ 日次トリガーを設定する
+ * - autoRecordFixedExpenses: 毎日06時（固定費自動記録）
+ * - checkBudgetAndAlert: 毎日08時（予算アラート）
+ * - dailyFetchCardEmails: 毎日07時（Gmail カード明細取込）
+ */
+function setupDailyTrigger() {
+    const dailyFunctions = ['autoRecordFixedExpenses', 'checkBudgetAndAlert', 'dailyFetchCardEmails'];
+
+    // 既存の同名トリガーを先に削除
+    ScriptApp.getProjectTriggers().forEach(function (trigger) {
+        if (dailyFunctions.indexOf(trigger.getHandlerFunction()) >= 0) {
+            ScriptApp.deleteTrigger(trigger);
+        }
+    });
+
+    ScriptApp.newTrigger('autoRecordFixedExpenses').timeBased().everyDays(1).atHour(6).create();
+    ScriptApp.newTrigger('dailyFetchCardEmails').timeBased().everyDays(1).atHour(7).create();
+    ScriptApp.newTrigger('checkBudgetAndAlert').timeBased().everyDays(1).atHour(8).create();
+
+    console.log("日次トリガー（固定費記録: 6時, Gmail取込: 7時, 予算アラート: 8時）を設定しました。");
+}
+
+/**
+ * 🚀 全トリガーを一括セットアップするマスター関数
+ * 初回セットアップ時にGASエディタから手動実行してください。
+ */
+function setupAllTriggers() {
+    setupDailyTrigger();
+    setupAITriggers();
+    console.log("✅ 全トリガーのセットアップが完了しました（日次/週次/月次）。");
+}
+
+/**
  * 📅 毎日定期実行で呼び出す固定費自動記録関数
  */
 function autoRecordFixedExpenses() {

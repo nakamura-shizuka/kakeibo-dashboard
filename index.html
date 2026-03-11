@@ -103,16 +103,6 @@
         <div class="sankey-container" id="sankeyChart"></div>
     </div>
 
-    <!-- 資産残高 -->
-    <div class="card" id="balanceCard" style="display:none;">
-        <div class="card-title"><span class="icon">🏦</span> 資産残高</div>
-        <div id="balanceList" style="display: flex; flex-direction: column; gap: 8px;"></div>
-        <div id="totalBalance"
-            style="text-align: right; margin-top: 16px; font-size: 1.15rem; font-weight: 800; color: var(--text-primary); border-top: 1px dashed var(--border-card); padding-top: 12px;">
-            合計: ¥0
-        </div>
-    </div>
-
     <!-- 年間収支レポート -->
     <div class="card" id="yearlyReportCard" style="display:none;">
         <div class="card-title"><span class="icon">📈</span> 年間収支レポート（<span id="yearlyChartYear"></span>年）</div>
@@ -205,8 +195,14 @@
         <div id="transferFields" style="display:none;">
             <div style="font-size:0.8rem; color:var(--text-muted); margin:8px 0 4px;">例：NISA積立・銀行振込・現金引き出しなど</div>
             <div class="input-row" style="margin-top: 6px;">
-                <label style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">🏦 移動元</label>
+                <label style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">↑ 移動元</label>
                 <select id="transferFromAccount" class="input-field" style="flex:1; color:var(--text-primary);">
+                    <option value="">-- 口座を選択 --</option>
+                </select>
+            </div>
+            <div class="input-row" style="margin-top: 6px;">
+                <label style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">↓ 振替先</label>
+                <select id="transferToAccount" class="input-field" style="flex:1; color:var(--text-primary);">
                     <option value="">-- 口座を選択 --</option>
                 </select>
             </div>

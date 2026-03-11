@@ -62,6 +62,9 @@ function addExpenseFromDashboard(memo, amount, category, dateStr, account, typeL
         const numAmount = amountValidation.value;
         const entryType = typeLabel || '支出';
         writeToSpreadsheet(memo, numAmount, category || '未分類', 'ダッシュボード入力', dateStr, account, entryType);
+        // 該当月のキャッシュを無効化
+        const dateObj = dateStr ? new Date(dateStr) : new Date();
+        invalidateDashboardCache(dateObj.getFullYear(), dateObj.getMonth());
         return {
             success: true,
             message: `${memo}: ¥${numAmount.toLocaleString()} を記録しました`,
@@ -138,6 +141,12 @@ function updateRecord(rowIndex, newCategory, newMemo) {
             sheet.getRange(rowIndex, 4).setValue(newMemo);
         }
 
+        // キャッシュを無効化（更新した行の日付を取得して該当月のみ削除）
+        try {
+            const dateCell = sheet.getRange(rowIndex, 1).getValue();
+            const d = new Date(dateCell);
+            invalidateDashboardCache(d.getFullYear(), d.getMonth());
+        } catch (e) { /* キャッシュ無効化失敗は無視 */ }
         return { success: true, message: '更新しました' };
     } catch (error) {
         console.error('レコード更新エラー:', error);

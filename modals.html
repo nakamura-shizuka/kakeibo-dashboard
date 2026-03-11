@@ -320,7 +320,7 @@
 
                 // 口座セレクトの調整
                 var accounts = currentSettings.accounts || [];
-                ['expenseAccount', 'incomeAccount', 'transferFromAccount'].forEach(function (selId) {
+                ['expenseAccount', 'incomeAccount', 'transferFromAccount', 'transferToAccount'].forEach(function (selId) {
                     var sel = document.getElementById(selId);
                     if (sel) {
                         sel.innerHTML = '<option value="">―― 口座を選択 ――</option>';
@@ -357,6 +357,8 @@
 
             var titleMap = { expense: '✏️ 支出を記録', income: '💰 収入を記録', transfer: '🏦 振替（貯蓄）を記録' };
             document.getElementById('modalTitle').textContent = titleMap[type] || '記録';
+            var placeholderMap = { expense: '品名（例：ランチ）', income: '収入名（例：給与・副業）', transfer: 'メモ（例：NISA積立）' };
+            document.getElementById('inputMemo').placeholder = placeholderMap[type] || '品名';
         }
 
         /**
@@ -388,6 +390,17 @@
                     : document.getElementById('expenseAccount');
             var account = accountSel ? accountSel.value : '';
             var typeLabel = (type === 'income') ? '収入' : (type === 'transfer') ? '振替' : '支出';
+
+            // 振替の場合: 振替先を取得してメモに付加
+            if (type === 'transfer') {
+                var transferToSel = document.getElementById('transferToAccount');
+                var transferTo = transferToSel ? transferToSel.value : '';
+                if (transferTo && account && account !== transferTo) {
+                    memo = memo ? memo + '（' + account + '→' + transferTo + '）' : account + '→' + transferTo;
+                } else if (transferTo) {
+                    memo = memo ? memo + '（振替先: ' + transferTo + '）' : '振替先: ' + transferTo;
+                }
+            }
 
             if (!memo) {
                 showToast('品名を入力してください', true);

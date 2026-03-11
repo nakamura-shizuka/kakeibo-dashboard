@@ -186,7 +186,7 @@ ${dailyStr}
         ],
         "generationConfig": {
             "temperature": 0.3,
-            "maxOutputTokens": 1500
+            "maxOutputTokens": 4000
         }
     };
 
@@ -224,8 +224,14 @@ ${dailyStr}
 function getAiAnalysis(isWeekly) {
     try {
         const resultText = generateAiAnalysis(isWeekly);
+        // generateAiAnalysis はエラー時も文字列を返すため、エラープレフィックスで判定
+        if (resultText && resultText.startsWith('分析エラー:')) {
+            logError('getAiAnalysis', resultText);
+            return { success: false, message: resultText };
+        }
         return { success: true, analysis: resultText };
     } catch (error) {
+        logError('getAiAnalysis 例外', error.message);
         return { success: false, message: error.message };
     }
 }
