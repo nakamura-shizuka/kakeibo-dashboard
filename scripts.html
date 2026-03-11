@@ -14,41 +14,22 @@
         let currentMonth = new Date().getMonth(); // 0-11
         let currentSettings = { budget: 150000, categories: "食費,日用品,交通費,娯楽,医療,衣服,通信費", fixedExpenses: [], accounts: [{ name: '財布(現金)', balance: 0 }] };
 
-        // GAS Web App API URL（デプロイ後に設定）
-        const GAS_API_URL = '<?= ScriptApp.getService().getUrl() ?>';
+        // GAS Web App API URL（build.js がビルド時に置換）
+        const GAS_API_URL = '%%GAS_URL%%';
 
         /**
-         * GAS API 共通呼び出しラッパー
+         * GAS API 共通呼び出しラッパー（GitHub Pages からの CORS を考慮してすべて POST）
          * @param {string} action - API名
          * @param {object} params - パラメータ
-         * @param {string} method - 'GET' or 'POST'（デフォルト: GET）
          * @returns {Promise<any>}
          */
-        function callGAS(action, params, method) {
-            method = method || 'GET';
-
-            if (method === 'GET') {
-                var query = 'action=' + encodeURIComponent(action);
-                if (params) {
-                    Object.keys(params).forEach(function (key) {
-                        if (params[key] !== undefined && params[key] !== null) {
-                            query += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
-                        }
-                    });
-                }
-                // キャッシュバスター（常に最新データを取得するため）
-                query += '&_=' + new Date().getTime();
-
-                return fetch(GAS_API_URL + '?' + query)
-                    .then(function (res) { return res.json(); });
-            } else {
-                var body = Object.assign({ action: action }, params || {});
-                return fetch(GAS_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(body)
-                }).then(function (res) { return res.json(); });
-            }
+        function callGAS(action, params) {
+            var body = Object.assign({ action: action }, params || {});
+            return fetch(GAS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(body)
+            }).then(function (res) { return res.json(); });
         }
 
         // ページ読み込み時に設定情報も取得

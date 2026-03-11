@@ -47,6 +47,27 @@ function doPost(e) {
                         bodyJson.accounts
                     );
                     break;
+                case 'getDashboardData':
+                    result = getDashboardData(
+                        bodyJson.year !== undefined ? Number(bodyJson.year) : undefined,
+                        bodyJson.month !== undefined ? Number(bodyJson.month) : undefined
+                    );
+                    break;
+                case 'getSettingsData':
+                    result = getSettingsData();
+                    break;
+                case 'getSankeyData':
+                    result = getSankeyData(Number(bodyJson.year), Number(bodyJson.month));
+                    break;
+                case 'getYearlyReportData':
+                    result = getYearlyReportData(Number(bodyJson.year));
+                    break;
+                case 'getAiAnalysis':
+                    result = getAiAnalysis(bodyJson.isWeekly === true || bodyJson.isWeekly === 'true');
+                    break;
+                case 'getMonthlyRecords':
+                    result = getMonthlyRecords(Number(bodyJson.year), Number(bodyJson.month));
+                    break;
                 default:
                     result = { success: false, message: '不明なaction: ' + bodyJson.action };
             }
