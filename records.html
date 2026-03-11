@@ -1,0 +1,158 @@
+<script>
+        function renderRecords(records) {
+            var listEl = document.getElementById('recordList');
+            listEl.innerHTML = '';
+
+            records.forEach(function (rec) {
+                var icon = CATEGORY_ICONS[rec.category] || '📦';
+                var colorIdx = Object.keys(CATEGORY_ICONS).indexOf(rec.category);
+                var bgColor = COLORS[colorIdx >= 0 ? colorIdx % COLORS.length : 0];
+                var rowIndex = rec.rowIndex || 0;
+
+                var li = document.createElement('li');
+                li.className = 'record-item';
+                li.style.cursor = 'pointer';
+                li.setAttribute('data-row', rowIndex);
+
+                // 表示行
+                var displayDiv = document.createElement('div');
+                displayDiv.style.cssText = 'display:flex; align-items:center; width:100%; gap:10px;';
+                displayDiv.innerHTML =
+                    '<div class="record-icon" style="background: ' + bgColor + '22">' + icon + '</div>' +
+                    '<div class="record-info" style="flex:1; min-width:0;">' +
+                    '  <div class="record-memo">' + escapeHtml(rec.memo) + '</div>' +
+                    '  <div class="record-meta">' + escapeHtml(rec.date) + ' · ' + escapeHtml(rec.category) + ' · ' + escapeHtml(rec.method || '') + '</div>' +
+                    '</div>' +
+                    '<div class="record-amount ' + (rec.type === '収入' ? 'income' : 'expense') + '" style="white-space:nowrap;">' +
+                    (rec.type === '収入' ? '+' : '-') + '¥' + rec.amount.toLocaleString() +
+                    '</div>' +
+                    '<div style="font-size:0.7rem; color:var(--text-muted); margin-left:4px;">✏️</div>';
+
+                // 編集フォーム（初期は非表示）
+                var editDiv = document.createElement('div');
+                editDiv.className = 'record-edit-form';
+                editDiv.style.cssText = 'display:none; width:100%; padding:10px 0 4px;';
+
+                // カテゴリ一覧（未分類を必ず含む）
+                var catOptions = (currentSettings.categories || '未分類,食費,日用品,交通費,娯楽,医療,衣服,通信費').split(',').map(function (c) { return c.trim(); });
+                if (catOptions.indexOf('未分類') < 0) catOptions.unshift('未分類');
+                if (catOptions.indexOf('返金') < 0) catOptions.push('返金');
+
+                // カテゴリチップを生成
+                var chipsHtml = '<div style="margin-bottom:6px; font-size:0.7rem; color:var(--text-muted);">🏷️ カテゴリを選択（タップで即保存）</div>';
+                chipsHtml += '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">';
+                catOptions.forEach(function (cat) {
+                    var isActive = cat === rec.category;
+                    var chipIcon = CATEGORY_ICONS[cat] || '📦';
+                    chipsHtml += '<button class="cat-chip" data-cat="' + escapeHtml(cat) + '" style="' +
+                        '-webkit-appearance:none; font-size:0.75rem; padding:5px 10px; border-radius:16px; cursor:pointer; ' +
+                        'border:' + (isActive ? '2px solid var(--accent)' : '1px solid var(--border-card)') + '; ' +
+                        'background:' + (isActive ? 'var(--accent)' : 'transparent') + '; ' +
+                        'color:' + (isActive ? '#fff' : 'var(--text-primary)') + '; ' +
+                        'font-weight:' + (isActive ? '700' : '400') + ';">' +
+                        chipIcon + ' ' + escapeHtml(cat) + '</button>';
+                });
+                chipsHtml += '</div>';
+
+                // メモ編集行
+                chipsHtml += '<div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">' +
+                    '<label style="flex: 0 0 auto; font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">✏️ 品名:</label>' +
+                    '<input type="text" class="edit-memo-input input-field" value="' + escapeHtml(rec.memo) + '" style="flex: 1 1 120px; min-width:120px; font-size:0.8rem; padding:6px 8px;">' +
+                    '<button class="edit-memo-save" style="-webkit-appearance:none; flex: 0 0 auto; font-size:0.7rem; padding:6px 12px; border-radius:16px; border:none; background:var(--accent); color:#fff; cursor:pointer;">変更</button>' +
+                    '</div>';
+
+                editDiv.innerHTML = chipsHtml;
+
+                li.appendChild(displayDiv);
+                li.appendChild(editDiv);
+
+                // クリックで編集フォームをトグル
+                displayDiv.addEventListener('click', function () {
+                    var wasVisible = editDiv.style.display !== 'none';
+                    // 他の編集フォームを全て閉じる
+                    document.querySelectorAll('.record-edit-form').forEach(function (f) { f.style.display = 'none'; });
+                    if (!wasVisible) editDiv.style.display = 'block';
+                });
+
+                // カテゴリチップのクリック → 即保存
+                (function (ri, ed, recObj) {
+                    ed.querySelectorAll('.cat-chip').forEach(function (chip) {
+                        chip.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            var newCat = this.getAttribute('data-cat');
+                            if (newCat === recObj.category) return; // 変更なし
+
+                            // 見た目を即座に更新
+                            ed.querySelectorAll('.cat-chip').forEach(function (c) {
+                                c.style.border = '1px solid var(--border-card)';
+                                c.style.background = 'transparent';
+                                c.style.color = 'var(--text-primary)';
+                                c.style.fontWeight = '400';
+                            });
+                            this.style.border = '2px solid var(--accent)';
+                            this.style.background = 'var(--accent)';
+                            this.style.color = '#fff';
+                            this.style.fontWeight = '700';
+
+                            if (!GAS_API_URL) {
+                                showToast('✅ (モック) カテゴリを「' + newCat + '」に変更');
+                                return;
+                            }
+
+                            showToast('💾 保存中...');
+                            callGAS('updateRecord', { rowIndex: ri, category: newCat })
+                                .then(function (result) {
+                                    if (result.success) {
+                                        showToast('✅ カテゴリを「' + newCat + '」に変更しました');
+                                        recObj.category = newCat;
+                                        var newIcon = CATEGORY_ICONS[newCat] || '📦';
+                                        displayDiv.querySelector('.record-icon').innerHTML = newIcon;
+                                        displayDiv.querySelector('.record-meta').textContent = recObj.date + ' · ' + newCat + ' · ' + (recObj.method || '');
+                                        setTimeout(function () { loadData(currentYear, currentMonth); }, 800);
+                                    } else {
+                                        showToast('❌ ' + result.message, true);
+                                    }
+                                })
+                                .catch(function (err) {
+                                    showToast('❌ 通信エラー', true);
+                                });
+                        });
+                    });
+
+                    // メモ変更ボタン
+                    ed.querySelector('.edit-memo-save').addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        var newMemo = ed.querySelector('.edit-memo-input').value.trim();
+                        if (newMemo === recObj.memo) { showToast('変更がありません'); return; }
+
+                        if (!GAS_API_URL) {
+                            showToast('✅ (モック) 品名を変更しました');
+                            return;
+                        }
+
+                        this.textContent = '...';
+                        var btn = this;
+                        callGAS('updateRecord', { rowIndex: ri, memo: newMemo })
+                            .then(function (result) {
+                                btn.textContent = '変更';
+                                if (result.success) {
+                                    showToast('✅ 品名を変更しました');
+                                    recObj.memo = newMemo;
+                                    displayDiv.querySelector('.record-memo').textContent = escapeHtml(newMemo);
+                                    setTimeout(function () { loadData(currentYear, currentMonth); }, 800);
+                                } else { showToast('❌ ' + result.message, true); }
+                            })
+                            .catch(function () {
+                                btn.textContent = '変更';
+                                showToast('❌ 通信エラー', true);
+                            });
+                    });
+                })(rowIndex, editDiv, rec);
+
+                listEl.appendChild(li);
+            });
+
+            showCard('recordsCard');
+        }
+
+</script>

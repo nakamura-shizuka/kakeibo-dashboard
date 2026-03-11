@@ -1,0 +1,346 @@
+<script>
+        function renderPieChart(categories) {
+            var container = document.getElementById('pieChart');
+            container.innerHTML = ''; // 既存のチャートをクリア
+
+            if (!categories || categories.length === 0) return;
+
+            // サイズ設定
+            var width = container.clientWidth || 300;
+            var height = container.clientHeight || 240;
+            var radius = Math.min(width, height) / 2 - 10;
+            var innerRadius = radius * 0.55; // ドーナツの太さ
+
+            var svg = d3.select('#pieChart')
+                .append('svg')
+                .attr('width', '100%')
+                .attr('height', '100%')
+                .attr('viewBox', '0 0 ' + width + ' ' + height)
+                .style('overflow', 'visible');
+
+            var g = svg.append('g')
+                .attr('transform', 'translate(' + (width / 2) + ',' + (height / 2) + ')');
+
+            var color = d3.scaleOrdinal()
+                .domain(categories.map(function (d) { return d.name; }))
+                .range(COLORS);
+
+            // 有効なカテゴリ（金額が0より大きい）が1つだけの場合、padAngleを0にして完全な円を描画する
+            var activeCategories = categories.filter(function (d) { return d.amount > 0; }).length;
+            var pie = d3.pie()
+                .value(function (d) { return d.amount; })
+                .sort(null)
+                .padAngle(0);
+
+            var arc = d3.arc()
+                .innerRadius(innerRadius)
+                .outerRadius(radius)
+                .cornerRadius(0);
+
+            var total = d3.sum(categories, function (d) { return d.amount; });
+
+            // 中央のテキスト
+            g.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '-0.3em')
+                .text('Total')
+                .style('font-size', '0.85rem')
+                .style('font-weight', '700')
+                .style('fill', 'var(--text-secondary)');
+
+            g.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '1.1em')
+                .text('¥' + total.toLocaleString())
+                .style('font-size', '1.4rem')
+                .style('font-weight', '800')
+                .style('fill', 'var(--text-primary)');
+
+            // スライスの描画とアニメーション
+            var paths = g.selectAll('path')
+                .data(pie(categories))
+                .join('path')
+                .attr('fill', function (d) { return color(d.data.name); })
+                .attr('stroke', activeCategories <= 1 ? 'none' : '#fff')
+                .attr('stroke-width', 2);
+
+            // ロード時のアニメーション
+            paths.transition()
+                .duration(1200)
+                .ease(d3.easeCubicOut)
+                .attrTween('d', function (d) {
+                    var i = d3.interpolate({ startAngle: 0, endAngle: 0 }, d);
+                    return function (t) { return arc(i(t)); };
+                });
+
+            // ホバーエフェクト
+            paths.on('mouseover', function (event, d) {
+                d3.select(this)
+                    .transition().duration(200)
+                    .attr('transform', 'scale(1.05)');
+            }).on('mouseout', function (event, d) {
+                d3.select(this)
+                    .transition().duration(200)
+                    .attr('transform', 'scale(1)');
+            });
+
+            // カスタムレジェンド
+            var legendEl = document.getElementById('categoryLegend');
+            legendEl.innerHTML = '';
+            categories.forEach(function (cat, i) {
+                var pct = total > 0 ? Math.round((cat.amount / total) * 100) : 0;
+                var item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = '<span class="legend-dot" style="background:' + COLORS[i % COLORS.length] + '"></span>' +
+                    escapeHtml(cat.name) + ' <span class="legend-amount">¥' + cat.amount.toLocaleString() + '</span> (' + pct + '%)';
+                legendEl.appendChild(item);
+            });
+
+            showCard('categoryCard');
+        }
+
+        /**
+         * サンキーダイアグラムの描画 - D3.js版
+         */
+        function renderSankey(sankeyData) {
+            if (!sankeyData || !sankeyData.flows || sankeyData.flows.length === 0) return;
+
+            // DOMサイズを正しく取得するため、先に表示をONにする
+            showCard('sankeyCard');
+
+            // 表示がDOMに反映されるのを待ってから描画する
+            requestAnimationFrame(function () {
+                var container = document.getElementById('sankeyChart');
+                container.innerHTML = ''; // クリア
+
+                var width = container.clientWidth || 300;
+                var height = container.clientHeight || 240;
+
+                var svg = d3.select('#sankeyChart')
+                    .append('svg')
+                    .attr('width', '100%')
+                    .attr('height', '100%')
+                    .attr('viewBox', '0 0 ' + width + ' ' + height)
+                    .style('overflow', 'visible');
+
+                // GASからのデータ: ['From', 'To', Amount]
+                // d3-sankey用フォーマット `{nodes: [], links: []}` への変換
+                var nodesMap = new Map();
+                sankeyData.flows.forEach(function (f) {
+                    nodesMap.set(f[0], { name: f[0] });
+                    nodesMap.set(f[1], { name: f[1] });
+                });
+                var nodes = Array.from(nodesMap.values());
+
+                var links = sankeyData.flows.map(function (f) {
+                    return {
+                        source: nodes.findIndex(n => n.name === f[0]),
+                        target: nodes.findIndex(n => n.name === f[1]),
+                        value: f[2]
+                    };
+                });
+
+                var sankey = d3.sankey()
+                    .nodeWidth(16)
+                    .nodePadding(20)
+                    .extent([[10, 10], [width - 10, height - 10]]);
+
+                var graph = sankey({
+                    nodes: nodes.map(d => Object.assign({}, d)),
+                    links: links.map(d => Object.assign({}, d))
+                });
+
+                var color = d3.scaleOrdinal()
+                    .domain(nodes.map(d => d.name))
+                    .range(COLORS);
+
+                // リンク（線）の描画
+                var link = svg.append('g')
+                    .attr('fill', 'none')
+                    .attr('stroke-opacity', 0.2)
+                    .selectAll('g')
+                    .data(graph.links)
+                    .join('g')
+                    .style('mix-blend-mode', 'multiply');
+
+                // リンクパスのアニメーション
+                var paths = link.append('path')
+                    .attr('d', d3.sankeyLinkHorizontal())
+                    .attr('stroke', function (d) {
+                        return color(d.source.name);
+                    })
+                    .attr('stroke-width', 0) // 最初は0
+                    .transition()
+                    .duration(1200)
+                    .ease(d3.easeCubicOut)
+                    .attr('stroke-width', function (d) { return Math.max(1, d.width); });
+
+                // ノード（四角）の描画
+                var nodeGroup = svg.append('g')
+                    .selectAll('g')
+                    .data(graph.nodes)
+                    .join('g');
+
+                nodeGroup.append('rect')
+                    .attr('x', function (d) { return d.x0; })
+                    .attr('y', function (d) { return d.y0; })
+                    .attr('height', function (d) { return Math.max(0, d.y1 - d.y0); })
+                    .attr('width', function (d) { return d.x1 - d.x0; })
+                    .attr('fill', function (d) { return color(d.name); })
+                    .attr('rx', 4) // 角丸
+                    .attr('ry', 4)
+                    .attr('opacity', 0) // アニメーション用
+                    .transition()
+                    .duration(800)
+                    .delay(400)
+                    .attr('opacity', 0.9);
+
+                // ラベルの描画
+                nodeGroup.append('text')
+                    .attr('x', function (d) { return d.x0 < width / 2 ? d.x1 + 8 : d.x0 - 8; })
+                    .attr('y', function (d) { return (d.y1 + d.y0) / 2; })
+                    .attr('dy', '0.35em')
+                    .attr('text-anchor', function (d) { return d.x0 < width / 2 ? 'start' : 'end'; })
+                    .text(function (d) { return d.name; })
+                    .style('font-size', '0.75rem')
+                    .style('font-weight', '700')
+                    .style('fill', 'var(--text-secondary)')
+                    .attr('opacity', 0)
+                    .transition()
+                    .duration(800)
+                    .delay(800)
+                    .attr('opacity', 1);
+            });
+        }
+
+        /**
+         * 年間収支レポートの描画 - D3.js版
+         */
+        function renderYearlyChart(yearlyData) {
+            if (!yearlyData || !yearlyData.monthlyData || yearlyData.monthlyData.length === 0) return;
+
+            document.getElementById('yearlyChartYear').textContent = yearlyData.year;
+            showCard('yearlyReportCard');
+
+            requestAnimationFrame(function () {
+                var container = document.getElementById('yearlyChart');
+                container.innerHTML = '';
+
+                var width = container.clientWidth || 300;
+                var height = container.clientHeight || 240;
+                var margin = { top: 20, right: 40, bottom: 30, left: 40 };
+
+                var innerWidth = width - margin.left - margin.right;
+                var innerHeight = height - margin.top - margin.bottom;
+
+                var svg = d3.select('#yearlyChart')
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height)
+                    .append('g')
+                    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+                var data = yearlyData.monthlyData;
+
+                // X Scale (Months)
+                var x = d3.scaleBand()
+                    .domain(data.map(function (d) { return d.month + '月'; }))
+                    .range([0, innerWidth])
+                    .padding(0.3);
+
+                // Y Scale Left (Expenses)
+                var yLeft = d3.scaleLinear()
+                    .domain([0, d3.max(data, function (d) { return Math.max(d.expense, d.income) * 1.1; }) || 100000])
+                    .range([innerHeight, 0]);
+
+                // Y Scale Right (Cumulative Savings)
+                var yRight = d3.scaleLinear()
+                    .domain([
+                        Math.min(0, d3.min(data, function (d) { return d.cumulativeSavings; }) * 1.1),
+                        Math.max(0, d3.max(data, function (d) { return d.cumulativeSavings; }) * 1.1) || 100000
+                    ])
+                    .range([innerHeight, 0]);
+
+                // Axes
+                svg.append('g')
+                    .attr('transform', 'translate(0,' + innerHeight + ')')
+                    .call(d3.axisBottom(x).tickSizeOuter(0))
+                    .selectAll("text")
+                    .style("fill", "var(--text-secondary)")
+                    .style("font-family", "'Nunito', 'M PLUS Rounded 1c', sans-serif");
+
+                // Left Axis
+                svg.append('g')
+                    .call(d3.axisLeft(yLeft).ticks(5).tickFormat(function (d) { return d / 1000 + 'k'; }))
+                    .selectAll("text").style("fill", "var(--text-secondary)");
+
+                // Right Axis
+                svg.append('g')
+                    .attr('transform', 'translate(' + innerWidth + ',0)')
+                    .call(d3.axisRight(yRight).ticks(5).tickFormat(function (d) { return d / 1000 + 'k'; }))
+                    .selectAll("text").style("fill", "#6EB5FF");
+
+                // Bar Chart (Expenses)
+                var bars = svg.selectAll('.bar')
+                    .data(data)
+                    .enter().append('rect')
+                    .attr('class', 'bar')
+                    .attr('x', function (d) { return x(d.month + '月'); })
+                    .attr('width', x.bandwidth())
+                    .attr('y', innerHeight)
+                    .attr('height', 0)
+                    .attr('fill', '#FF9CEE')
+                    .attr('rx', 3)
+                    .attr('ry', 3);
+
+                bars.transition()
+                    .duration(800)
+                    .delay(function (d, i) { return i * 50; })
+                    .attr('y', function (d) { return yLeft(d.expense); })
+                    .attr('height', function (d) { return innerHeight - yLeft(d.expense); });
+
+                // Line Chart (Cumulative Savings)
+                var line = d3.line()
+                    .x(function (d) { return x(d.month + '月') + x.bandwidth() / 2; })
+                    .y(function (d) { return yRight(d.cumulativeSavings); })
+                    .curve(d3.curveMonotoneX);
+
+                var path = svg.append('path')
+                    .datum(data)
+                    .attr('fill', 'none')
+                    .attr('stroke', '#6EB5FF')
+                    .attr('stroke-width', 3)
+                    .attr('d', line);
+
+                var totalLength = path.node().getTotalLength();
+
+                path.attr("stroke-dasharray", totalLength + " " + totalLength)
+                    .attr("stroke-dashoffset", totalLength)
+                    .transition()
+                    .duration(1500)
+                    .ease(d3.easeLinear)
+                    .attr("stroke-dashoffset", 0);
+
+                // Dots for Line Chart
+                var dots = svg.selectAll('.dot')
+                    .data(data)
+                    .enter().append('circle')
+                    .attr('class', 'dot')
+                    .attr('cx', function (d) { return x(d.month + '月') + x.bandwidth() / 2; })
+                    .attr('cy', function (d) { return yRight(d.cumulativeSavings); })
+                    .attr('r', 0)
+                    .attr('fill', '#fff')
+                    .attr('stroke', '#6EB5FF')
+                    .attr('stroke-width', 2);
+
+                dots.transition()
+                    .duration(500)
+                    .delay(function (d, i) { return 1500 + i * 50; })
+                    .attr('r', 4);
+            });
+        }
+
+        /**
+         * 取引履歴の描画
+         */
+</script>

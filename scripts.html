@@ -1,0 +1,409 @@
+<script>
+        // チャート用カラーパレット (Kawaii & Clean パステル)
+        const COLORS = ['#FF9CEE', '#B28DFF', '#6EB5FF', '#85E3FF', '#AFF8D8', '#E7FFAC', '#FFF5BA', '#FFABAB'];
+
+        // カテゴリ別アイコンマップ
+        const CATEGORY_ICONS = {
+            '食費': '🍽️', '日用品': '🧴', '交通費': '🚃', '固定費': '🏠',
+            '娯楽': '🎮', '医療': '🏥', '衣服': '👕', '教育': '📚',
+            '通信費': '📱', '給与': '💼', '収入': '💰', '未分類': '📦'
+        };
+
+        // 現在表示している年月と設定情報を管理
+        let currentYear = new Date().getFullYear();
+        let currentMonth = new Date().getMonth(); // 0-11
+        let currentSettings = { budget: 150000, categories: "食費,日用品,交通費,娯楽,医療,衣服,通信費", fixedExpenses: [], accounts: [{ name: '財布(現金)', balance: 0 }] };
+
+        // GAS Web App API URL（デプロイ後に設定）
+        const GAS_API_URL = '<?= ScriptApp.getService().getUrl() ?>';
+
+        /**
+         * GAS API 共通呼び出しラッパー
+         * @param {string} action - API名
+         * @param {object} params - パラメータ
+         * @param {string} method - 'GET' or 'POST'（デフォルト: GET）
+         * @returns {Promise<any>}
+         */
+        function callGAS(action, params, method) {
+            method = method || 'GET';
+
+            if (method === 'GET') {
+                var query = 'action=' + encodeURIComponent(action);
+                if (params) {
+                    Object.keys(params).forEach(function (key) {
+                        if (params[key] !== undefined && params[key] !== null) {
+                            query += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+                        }
+                    });
+                }
+                // キャッシュバスター（常に最新データを取得するため）
+                query += '&_=' + new Date().getTime();
+
+                return fetch(GAS_API_URL + '?' + query)
+                    .then(function (res) { return res.json(); });
+            } else {
+                var body = Object.assign({ action: action }, params || {});
+                return fetch(GAS_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(body)
+                }).then(function (res) { return res.json(); });
+            }
+        }
+
+        // ページ読み込み時に設定情報も取得
+        if (GAS_API_URL) {
+            callGAS('getSettingsData').then(function (res) {
+                if (res && res.budget) {
+                    currentSettings = res;
+                    if (!currentSettings.accounts) currentSettings.accounts = [];
+                    if (!currentSettings.fixedExpenses) currentSettings.fixedExpenses = [];
+                }
+            }).catch(function () { });
+        }
+
+        /**
+         * データ読み込み（メインエントリポイント）
+         */
+        function loadData(year, month) {
+            document.getElementById('loadingState').style.display = 'flex';
+            hideAllCards();
+
+            // 引数が省略された場合はグローバル変数を使用
+            const targetYear = year !== undefined ? year : currentYear;
+            const targetMonth = month !== undefined ? month : currentMonth;
+
+            // ローカルテスト用モックデータ
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                console.log('ローカルプレビューモード:', targetYear, '年', targetMonth + 1, '月');
+                setTimeout(function () {
+                    // 月によってモックデータを切り替え
+                    let mockData, mockSankey;
+
+                    if (targetMonth === new Date().getMonth()) {
+                        // 今月のデモデータ
+                        mockData = {
+                            monthLabel: targetYear + "年" + (targetMonth + 1) + "月",
+                            budget: 150000,
+                            totalSpending: 95000,
+                            totalIncome: 300000,
+                            carryOver: 20000, // 以前の月からの繰越のシミュレーション
+                            categories: [
+                                { name: "食費", amount: 45000 },
+                                { name: "日用品", amount: 12000 },
+                                { name: "交通費", amount: 8000 },
+                                { name: "娯楽", amount: 20000 },
+                                { name: "通信費", amount: 10000 }
+                            ],
+                            recentRecords: [
+                                { date: (targetMonth + 1) + "/05", category: "食費", memo: "スーパー", method: "カード", amount: 5600, type: "支出" },
+                                { date: (targetMonth + 1) + "/04", category: "交通費", memo: "チャージ", method: "現金", amount: 3000, type: "支出" },
+                                { date: (targetMonth + 1) + "/02", category: "日用品", memo: "ドラッグストア", method: "PayPay", amount: 2800, type: "支出" }
+                            ],
+                            accountBalances: { "財布(現金)": 52600, "BankA": -15000 },
+                            aiMessage: "🤖 【AI家計アドバイス】\n\n今月は食費がよく抑えられていますね！素晴らしいです✨\nこの調子で交際費をあと少し抑えられれば、来月はさらに貯金額がアップしそうです💡\n\n※このメッセージはAIが作成しました✨"
+                        };
+                        mockSankey = {
+                            flows: [
+                                ["給与", "生活費", 100000],
+                                ["給与", "貯金", 50000],
+                                ["生活費", "食費", 40000],
+                                ["生活費", "日用品", 20000],
+                                ["生活費", "その他", 40000]
+                            ]
+                        };
+                    } else {
+                        // 過去のデモデータ
+                        mockData = {
+                            monthLabel: targetYear + "年" + (targetMonth + 1) + "月",
+                            budget: 150000,
+                            totalSpending: 148000,
+                            totalIncome: 280000,
+                            carryOver: -5000, // マイナスの繰越シミュレーション
+                            categories: [
+                                { name: "食費", amount: 60000 },
+                                { name: "娯楽", amount: 38000 },
+                                { name: "固定費", amount: 50000 }
+                            ],
+                            recentRecords: [
+                                { date: (targetMonth + 1) + "/20", category: "娯楽", memo: "映画", method: "カード", amount: 3800, type: "支出" }
+                            ],
+                            aiMessage: "🤖 【AI家計アドバイス】\n\n娯楽費が少し予算をオーバー気味のようですね👀\n来週は「おうちでゆっくり過ごす日」を作ってみるのはいかがでしょうか？\n\n※このメッセージはAIが作成しました✨"
+                        };
+                        mockSankey = {
+                            flows: [
+                                ["給与", "生活費", 150000],
+                                ["給与", "貯金", 30000],
+                                ["生活費", "食費", 60000],
+                                ["生活費", "娯楽", 40000],
+                                ["生活費", "固定費", 50000]
+                            ]
+                        };
+                    }
+
+                    onDashboardDataLoaded(mockData);
+                    try {
+                        renderSankey(mockSankey);
+                    } catch (e) {
+                        console.error('Sankey描画エラー:', e);
+                    }
+                    try {
+                        let mockYearlyData = { year: targetYear, monthlyData: [] };
+                        let cuml = 100000;
+                        for (let m = 1; m <= 12; m++) {
+                            let inc = m <= targetMonth + 1 ? 300000 : 0;
+                            let exp = m <= targetMonth + 1 ? 250000 + Math.random() * 50000 : 0;
+                            let sav = inc - exp;
+                            if (m <= targetMonth + 1) cuml += sav;
+                            mockYearlyData.monthlyData.push({ month: m, income: inc, expense: exp, savings: sav, cumulativeSavings: cuml });
+                        }
+                        renderYearlyChart(mockYearlyData);
+                    } catch (e) {
+                        console.error('Yearly Chart描画エラー:', e);
+                    }
+                }, 800);
+                return;
+            }
+
+            // GASのサーバー関数を呼び出し
+            callGAS('getDashboardData', { year: targetYear, month: targetMonth })
+                .then(onDashboardDataLoaded)
+                .catch(onError);
+        }
+
+        /**
+         * ダッシュボードデータ受信後の処理
+         */
+        function onDashboardDataLoaded(data) {
+            document.getElementById('loadingState').style.display = 'none';
+
+            if (data.error) {
+                showError(data.error);
+                return;
+            }
+
+            // 月表示
+            document.getElementById('monthLabel').textContent = data.monthLabel;
+
+            // データがゼロの場合
+            if (data.totalSpending === 0 && data.totalIncome === 0 && data.recentRecords.length === 0) {
+                showCard('emptyState');
+                return;
+            }
+
+            // サマリーカード
+            renderSummary(data);
+
+            // AIアドバイスカード
+            if (data.aiMessage) {
+                // LINE用の装飾ヘッダー/フッターを画面用に少しクリーンナップ
+                var cleanMsg = data.aiMessage
+                    .replace(/🤖 【AI家計アドバイス】\n\n/, '')
+                    .replace(/\n\n※このメッセージはAIが作成しました✨/, '');
+                document.getElementById('aiMessageText').textContent = cleanMsg;
+                showCard('aiAdviceCard');
+            } else {
+                document.getElementById('aiAdviceCard').style.display = 'none';
+            }
+
+            // カテゴリ別円グラフ
+            if (data.categories.length > 0) {
+                renderPieChart(data.categories);
+            }
+
+            // 取引履歴
+            if (data.recentRecords.length > 0) {
+                renderRecords(data.recentRecords);
+            }
+
+            // 資産残高リストの描画
+            const balList = document.getElementById('balanceList');
+            balList.innerHTML = '';
+            let totalBal = 0;
+            let hasBalance = false;
+
+            if (data.accountBalances && Object.keys(data.accountBalances).length > 0) {
+                for (let accName in data.accountBalances) {
+                    hasBalance = true;
+                    let balance = data.accountBalances[accName];
+                    totalBal += balance;
+
+                    let color = balance < 0 ? 'var(--danger)' : 'var(--text-primary)';
+                    let rowHtml = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">
+                            <span style="font-size:0.95rem; font-weight:700; color:var(--text-secondary);">${escapeHtml(accName)}</span>
+                            <span style="font-weight:700; font-size:1.1rem; color:${color};">¥${balance.toLocaleString()}</span>
+                        </div>
+                    `;
+                    balList.insertAdjacentHTML('beforeend', rowHtml);
+                }
+            }
+
+            if (hasBalance) {
+                let sumColor = totalBal < 0 ? 'var(--danger)' : 'var(--accent)';
+                document.getElementById('totalBalance').innerHTML = '合計: <span style="color:' + sumColor + '">¥' + totalBal.toLocaleString() + '</span>';
+                showCard('balanceCard');
+            } else {
+                document.getElementById('balanceCard').style.display = 'none';
+            }
+
+            // サンキーダイアグラム（別APIで取得）
+            if (GAS_API_URL) {
+                callGAS('getSankeyData', { year: currentYear, month: currentMonth })
+                    .then(renderSankey)
+                    .catch(function () { /* サンキーが失敗してもダッシュボードは表示 */ });
+
+                // 年間レポート（別APIで取得）
+                callGAS('getYearlyReportData', { year: currentYear })
+                    .then(renderYearlyChart)
+                    .catch(function () { /* 年間レポートエラー */ });
+            }
+        }
+
+        /**
+         * 支出サマリーの描画
+         */
+        function renderSummary(data) {
+            var budget = data.budget;
+            var spent = data.totalSpending;
+            var percent = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+            var remain = budget - spent;
+
+            // 繰越金表示の更新
+            var carryOverBadge = document.getElementById('carryOverBadge');
+            if (carryOverBadge && data.carryOver !== undefined) {
+                var carryAmount = data.carryOver;
+                var carryStr = carryAmount >= 0 ? "+¥" + carryAmount.toLocaleString() : "-¥" + Math.abs(carryAmount).toLocaleString();
+                var badgeStyle = carryAmount >= 0 ? "background:#E8F5E9; color:#2E7D32;" : "background:#FFEBEE; color:#D32F2F;";
+                carryOverBadge.innerHTML = '🎁 前月繰越: ' + carryStr;
+                carryOverBadge.setAttribute('style', 'font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; font-weight: 600; ' + badgeStyle);
+            }
+
+            // 数値のアニメーション
+            animateNumber('totalSpending', spent);
+            document.getElementById('budgetAmount').textContent = budget.toLocaleString();
+            document.getElementById('budgetLabel').textContent = budget.toLocaleString();
+            document.getElementById('percentUsed').textContent = percent + '%';
+            document.getElementById('totalIncome').textContent = '¥' + data.totalIncome.toLocaleString();
+
+            // 残りの予算とステータス表示
+            var remainEl = document.getElementById('remainBudget');
+            var statusClass = 'safe';
+            var remainIcon = '✨ ';
+
+            if (percent > 85) {
+                statusClass = 'danger';
+                remainIcon = '⚠️ ';
+            } else if (percent > 60) {
+                statusClass = 'warning';
+                remainIcon = '👀 ';
+            }
+
+            remainEl.className = 'mini-value ' + statusClass;
+            // マイナスの場合は赤字強調
+            if (remain < 0) {
+                statusClass = 'danger';
+                remainEl.className = 'mini-value danger';
+                remainIcon = '🚨 ';
+            }
+            remainEl.textContent = remainIcon + '¥' + remain.toLocaleString();
+
+            // プログレスバー
+            var fill = document.getElementById('progressFill');
+            fill.className = 'progress-fill ' + statusClass;
+            setTimeout(function () {
+                fill.style.width = Math.min(percent, 100) + '%';
+            }, 100);
+
+            showCard('summaryCard');
+        }
+
+        /**
+         * カテゴリ別円グラフ（ドーナツグラフ）の描画 - D3.js版
+         */
+
+        /**
+         * トースト通知
+         */
+        function showToast(message, isError) {
+            var toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(function () {
+                toast.className = 'toast';
+            }, 3000);
+        }
+
+        /**
+         * 💡 AI分析をリクエストする
+         */
+        function requestAiAnalysis() {
+            var btn = document.querySelector('button[title="AIで分析する"]');
+            var loadingSpan = document.getElementById('aiAnalysisLoading');
+            var card = document.getElementById('aiAdviceCard');
+            var msgArea = document.getElementById('aiMessageText');
+
+            if (btn) btn.disabled = true;
+            if (loadingSpan) loadingSpan.style.display = 'inline';
+            if (msgArea) msgArea.textContent = '過去のデータや予算設定から、専属アナリストが分析レポートを作成しています... (約10〜20秒かかります) 🤖💭';
+            showCard('aiAdviceCard');
+
+            if (!GAS_API_URL && typeof google === 'undefined') {
+                setTimeout(function () {
+                    if (btn) btn.disabled = false;
+                    if (loadingSpan) loadingSpan.style.display = 'none';
+                    msgArea.textContent = "【ローカルデモ分析結果】\n\n・食費が先月比で+15%ペースで進行しています。今週末の外食は控えることをおすすめします。\n・このペースだと月末に予算を約8,000円超過する見込みです。浪費ポイントは「交際費」「娯楽費」です。";
+                    showToast('✅ 分析が完了しました');
+                }, 2000);
+                return;
+            }
+
+            callGAS('getAiAnalysis', { isWeekly: false }) // ダッシュボードからは一旦月次ベースの分析をコール
+                .then(function (result) {
+                    if (btn) btn.disabled = false;
+                    if (loadingSpan) loadingSpan.style.display = 'none';
+                    if (result.success) {
+                        try {
+                            msgArea.innerHTML = marked.parse(result.analysis);
+                        } catch (e) {
+                            msgArea.textContent = result.analysis;
+                        }
+                        // 強制的に見えるようにスタイルを調整
+                        msgArea.style.padding = '8px';
+                        msgArea.style.color = '#1E293B';
+
+                        showToast('✅ AI分析が完了しました');
+                    } else {
+                        msgArea.textContent = "エラーが発生しました: " + result.message;
+                        showToast('❌ ' + result.message, true);
+                    }
+                })
+                .catch(function (err) {
+                    if (btn) btn.disabled = false;
+                    if (loadingSpan) loadingSpan.style.display = 'none';
+                    msgArea.textContent = "通信エラーが発生しました。";
+                    showToast('❌ 通信エラー', true);
+                });
+        }
+
+        /**
+         * 表示する月を変更する
+         */
+        function changeMonth(delta) {
+            currentMonth += delta;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            } else if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            loadData(currentYear, currentMonth);
+        }
+
+        // ===== 初期化 =====
+        window.addEventListener('DOMContentLoaded', function () {
+            // 現在の年月で初期ロード
+            loadData(currentYear, currentMonth);
+        });
+</script>

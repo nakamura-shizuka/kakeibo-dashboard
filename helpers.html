@@ -1,0 +1,75 @@
+<script>
+        // ===== ヘルパー関数 =====
+
+        /**
+         * 数値のカウントアップアニメーション
+         */
+        function animateNumber(elementId, target) {
+            var el = document.getElementById(elementId);
+            var current = 0;
+            var duration = 800;
+            var startTime = null;
+
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                var progress = Math.min((timestamp - startTime) / duration, 1);
+                // イージング（ease-out）
+                var eased = 1 - Math.pow(1 - progress, 3);
+                current = Math.round(eased * target);
+                el.textContent = current.toLocaleString();
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                }
+            }
+
+            requestAnimationFrame(step);
+        }
+
+        /**
+         * カードをアニメーション付きで表示
+         */
+        function showCard(id, delay) {
+            var card = document.getElementById(id);
+            card.style.display = 'block';
+            setTimeout(function () {
+                card.classList.add('visible');
+            }, delay || 50);
+        }
+
+        /**
+         * 全カードを非表示
+         */
+        function hideAllCards() {
+            var cards = document.querySelectorAll('.card');
+            cards.forEach(function (card) {
+                card.style.display = 'none';
+                card.classList.remove('visible');
+            });
+        }
+
+        /**
+         * HTMLエスケープ
+         */
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+
+        /**
+         * エラー表示
+         */
+        function onError(err) {
+            document.getElementById('loadingState').style.display = 'none';
+            console.error('データ取得エラー:', err);
+            var emptyEl = document.getElementById('emptyState');
+            emptyEl.querySelector('.empty-icon').textContent = '⚠️';
+            emptyEl.querySelector('.empty-message').innerHTML = 'データの読み込みに失敗しました。<br>画面を更新してみてください。';
+            showCard('emptyState');
+        }
+
+        function showError(msg) {
+            onError(msg);
+        }
+
+</script>

@@ -1,0 +1,483 @@
+<script>
+        // ===== 設定モーダル関連 =====
+
+        function renderFixedExpenses() {
+            var container = document.getElementById('fixedExpensesList');
+            container.innerHTML = '';
+            var list = currentSettings.fixedExpenses || [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">固定費は設定されていません</div>';
+                return;
+            }
+            list.forEach(function (item, index) {
+                container.appendChild(createFixedExpenseElement(item, index));
+            });
+        }
+
+        function createFixedExpenseElement(item, index) {
+            var row = document.createElement('div');
+            row.className = 'fixed-expense-row';
+            row.setAttribute('data-index', index);
+
+            var dateSelect = '<select class="fe-date" style="flex: 0 0 54px; padding:8px 2px;">';
+            for (var i = 1; i <= 31; i++) {
+                var sel = (i == (item.date || 25)) ? 'selected' : '';
+                dateSelect += '<option value="' + i + '" ' + sel + '>' + i + '日</option>';
+            }
+            dateSelect += '</select>';
+
+            var currentCatsInput = document.getElementById('settingCategories');
+            var catsStr = currentCatsInput ? currentCatsInput.value : currentSettings.categories;
+            var cats = catsStr.split(',').map(c => c.trim()).filter(c => c);
+            var catSelect = '<select class="fe-category" style="width: 70px;">';
+            var hasSavedCat = false;
+            cats.forEach(c => {
+                var sel = (c === (item.category || '未分類')) ? 'selected' : '';
+                if (sel) hasSavedCat = true;
+                catSelect += '<option value="' + c + '" ' + sel + '>' + c + '</option>';
+            });
+            if (!hasSavedCat && item.category) {
+                catSelect += '<option value="' + escapeHtml(item.category) + '" selected>' + escapeHtml(item.category) + '</option>';
+            }
+            catSelect += '</select>';
+
+            row.innerHTML =
+                dateSelect +
+                '<input type="text" class="fe-memo" style="flex:1; min-width:60px;" placeholder="品名(例:家賃)" value="' + escapeHtml(item.memo || '') + '">' +
+                catSelect +
+                '<input type="number" class="fe-amount" style="width:70px;" placeholder="金額" value="' + (item.amount || '') + '">' +
+                '<button class="del-btn" onclick="removeFixedExpenseRow(this)">×</button>';
+            return row;
+        }
+
+        function addFixedExpenseRow() {
+            var container = document.getElementById('fixedExpensesList');
+            if (container.querySelector('.fixed-expense-row') === null && container.innerHTML.indexOf('固定費は設定されていません') !== -1) {
+                container.innerHTML = '';
+            }
+            var newIndex = container.children.length;
+            container.appendChild(createFixedExpenseElement({ date: 25, memo: '', category: '未分類', amount: '' }, newIndex));
+        }
+
+        function removeFixedExpenseRow(btnEl) {
+            var row = btnEl.closest('.fixed-expense-row');
+            if (row && row.parentNode) {
+                row.parentNode.removeChild(row);
+            }
+            if (document.getElementById('fixedExpensesList').children.length === 0) {
+                document.getElementById('fixedExpensesList').innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">固定費は設定されていません</div>';
+            }
+        }
+
+        function gatherFixedExpenses() {
+            var list = [];
+            var rows = document.querySelectorAll('#fixedExpensesList .fixed-expense-row');
+            if (rows && rows.length > 0) {
+                rows.forEach(function (row) {
+                    var dateEl = row.querySelector('.fe-date');
+                    var memoEl = row.querySelector('.fe-memo');
+                    var catEl = row.querySelector('.fe-category');
+                    var amountEl = row.querySelector('.fe-amount');
+                    if (dateEl && memoEl && catEl && amountEl) {
+                        var date = dateEl.value;
+                        var memo = memoEl.value.trim();
+                        var cat = catEl.value;
+                        var amount = amountEl.value;
+                        if (memo && amount) {
+                            list.push({ date: parseInt(date), memo: memo, category: cat, amount: parseInt(amount) });
+                        }
+                    }
+                });
+            }
+            return list;
+        }
+
+        function renderAccounts() {
+            var container = document.getElementById('accountsList');
+            container.innerHTML = '';
+            var list = currentSettings.accounts || [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">口座が設定されていません</div>';
+                return;
+            }
+            list.forEach(function (item, index) {
+                container.appendChild(createAccountElement(item, index));
+            });
+        }
+
+        function createAccountElement(item, index) {
+            var row = document.createElement('div');
+            row.className = 'fixed-expense-row'; // 固定費と同じスタイルを流用
+            row.setAttribute('data-index', index);
+
+            row.innerHTML =
+                '<input type="text" class="ac-name" style="flex:2; min-width:80px;" placeholder="口座・カード名" value="' + escapeHtml(item.name || '') + '">' +
+                '<input type="number" class="ac-balance" style="flex:1; width:80px;" placeholder="現在残高" value="' + (item.balance || '') + '">' +
+                '<span style="font-size:0.8rem; color:var(--text-muted);">円</span>' +
+                '<button class="del-btn" onclick="removeAccountRow(this)">×</button>';
+            return row;
+        }
+
+        function addAccountRow() {
+            var container = document.getElementById('accountsList');
+            if (container.querySelector('.fixed-expense-row') === null && container.innerHTML.indexOf('口座が設定されていません') !== -1) {
+                container.innerHTML = '';
+            }
+            var newIndex = container.children.length;
+            container.appendChild(createAccountElement({ name: '', balance: '' }, newIndex));
+        }
+
+        function removeAccountRow(btnEl) {
+            var row = btnEl.closest('.fixed-expense-row');
+            if (row && row.parentNode) {
+                row.parentNode.removeChild(row);
+            }
+            if (document.getElementById('accountsList').children.length === 0) {
+                document.getElementById('accountsList').innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">口座が設定されていません</div>';
+            }
+        }
+
+        function gatherAccounts() {
+            var list = [];
+            var rows = document.querySelectorAll('#accountsList .fixed-expense-row');
+            if (rows && rows.length > 0) {
+                rows.forEach(function (row) {
+                    var nameInput = row.querySelector('.ac-name');
+                    var balanceInput = row.querySelector('.ac-balance');
+                    if (nameInput && balanceInput) {
+                        var name = nameInput.value.trim();
+                        var balance = balanceInput.value;
+                        if (name) {
+                            // 入力がない場合や無効な場合は0円とする
+                            list.push({ name: name, balance: parseInt(balance) || 0 });
+                        }
+                    }
+                });
+            }
+            return list;
+        }
+
+        document.getElementById('settingCategories').addEventListener('blur', function () {
+            var catsStr = this.value;
+            var cats = catsStr.split(',').map(function (c) { return c.trim(); }).filter(function (c) { return c; });
+            document.querySelectorAll('.fe-category').forEach(function (select) {
+                var currentVal = select.value;
+                select.innerHTML = '';
+                var hasSavedCat = false;
+                cats.forEach(function (c) {
+                    var option = document.createElement('option');
+                    option.value = c;
+                    option.textContent = c;
+                    if (c === currentVal) {
+                        option.selected = true;
+                        hasSavedCat = true;
+                    }
+                    select.appendChild(option);
+                });
+                if (!hasSavedCat && currentVal) {
+                    var option = document.createElement('option');
+                    option.value = escapeHtml(currentVal);
+                    option.textContent = escapeHtml(currentVal);
+                    option.selected = true;
+                    select.appendChild(option);
+                }
+            });
+        });
+
+        function openSettingsModal() {
+            var modal = document.getElementById('settingsModal');
+            var overlay = document.getElementById('settingsOverlay');
+
+            document.getElementById('settingBudget').value = currentSettings.budget;
+            document.getElementById('settingCategories').value = currentSettings.categories;
+
+            renderFixedExpenses();
+            renderAccounts();
+
+            modal.classList.add('active');
+            overlay.classList.add('active');
+        }
+
+        function closeSettingsModal() {
+            var modal = document.getElementById('settingsModal');
+            var overlay = document.getElementById('settingsOverlay');
+            modal.classList.remove('active');
+            overlay.classList.remove('active');
+        }
+
+        function saveSettings() {
+            var newBudget = document.getElementById('settingBudget').value;
+            var newCats = document.getElementById('settingCategories').value;
+            var newFx = gatherFixedExpenses();
+            var newAcc = gatherAccounts();
+
+            if (!newBudget || !newCats) {
+                showToast('予算とカテゴリを入力してください', true);
+                return;
+            }
+
+            var btn = document.getElementById('saveSettingsBtn');
+            var originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '保存中...';
+
+            var fxStr = JSON.stringify(newFx);
+            var accStr = JSON.stringify(newAcc);
+
+            if (!GAS_API_URL && typeof google === 'undefined') {
+                setTimeout(function () {
+                    currentSettings.budget = parseInt(newBudget);
+                    currentSettings.categories = newCats;
+                    currentSettings.fixedExpenses = newFx;
+                    currentSettings.accounts = newAcc;
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    closeSettingsModal();
+                    showToast('✅ (Local) 設定を保存しました。口座数:' + newAcc.length);
+                    loadData(currentYear, currentMonth); // 再描画
+                }, 800);
+                return;
+            }
+
+            callGAS('saveSettings', {
+                budget: newBudget,
+                categories: newCats,
+                fixedCosts: fxStr,
+                accounts: accStr
+            })
+                .then(function (res) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    if (res.success) {
+                        currentSettings.budget = parseInt(newBudget);
+                        currentSettings.categories = newCats;
+                        currentSettings.fixedExpenses = newFx;
+                        currentSettings.accounts = newAcc;
+                        closeSettingsModal();
+                        showToast('✅ 設定を保存しました');
+                        loadData(currentYear, currentMonth); // ダッシュボード再描画
+                    } else {
+                        showToast('保存エラー: ' + res.error, true);
+                    }
+                })
+                .catch(function (err) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    showToast('通信エラーが発生しました', true);
+                });
+        }
+
+        // ===== 入力モーダル関連 =====
+
+        var selectedCategory = '未分類';
+
+        /**
+         * 入力モーダルの開閉
+         */
+        function toggleInputModal() {
+            var modal = document.getElementById('inputModal');
+            var overlay = document.getElementById('modalOverlay');
+            var fab = document.getElementById('fabBtn');
+            var isOpen = modal.classList.contains('active');
+
+            if (isOpen) {
+                modal.classList.remove('active');
+                overlay.classList.remove('active');
+                fab.classList.remove('open');
+            } else {
+                modal.classList.add('active');
+                overlay.classList.add('active');
+                fab.classList.add('open');
+
+                // 現在のカテゴリ設定リストをもとに、チップボタンを動的に生成
+                var chipsContainer = document.getElementById('categoryChips');
+                var catArray = currentSettings.categories.split(',').map(c => c.trim()).filter(c => c);
+                if (catArray.length > 0) {
+                    chipsContainer.innerHTML = '';
+                    catArray.forEach(function (catName, index) {
+                        var icon = CATEGORY_ICONS[catName] || '🏷️';
+                        var isSelected = (index === 0) ? 'selected' : '';
+                        if (index === 0) selectedCategory = catName; // デフォルトを選択状態に
+
+                        var btn = document.createElement('button');
+                        btn.className = 'chip ' + isSelected;
+                        btn.setAttribute('data-cat', catName);
+                        btn.innerHTML = icon + ' ' + escapeHtml(catName);
+                        btn.onclick = function () { selectCategory(this); };
+                        chipsContainer.appendChild(btn);
+                    });
+                }
+
+                // 日付を今日に設定（値が空の場合のみ）
+                var dateInput = document.getElementById('inputDate');
+                if (!dateInput.value) {
+                    var today = new Date();
+                    var yyyy = today.getFullYear();
+                    var mm = String(today.getMonth() + 1).padStart(2, '0');
+                    var dd = String(today.getDate()).padStart(2, '0');
+                    dateInput.value = yyyy + '-' + mm + '-' + dd;
+                }
+
+                // 口座セレクトの調整
+                var accounts = currentSettings.accounts || [];
+                ['expenseAccount', 'incomeAccount', 'transferFromAccount'].forEach(function (selId) {
+                    var sel = document.getElementById(selId);
+                    if (sel) {
+                        sel.innerHTML = '<option value="">―― 口座を選択 ――</option>';
+                        accounts.forEach(function (acc) {
+                            var opt = document.createElement('option');
+                            opt.value = acc.name;
+                            opt.textContent = acc.name;
+                            sel.appendChild(opt);
+                        });
+                    }
+                });
+
+                // 品名入力にフォーカス
+                setTimeout(function () {
+                    document.getElementById('inputMemo').focus();
+                }, 350);
+            }
+        }
+
+        /**
+         * 入力タイプ切り替え（支出・収入・振替）
+         */
+        var currentInputType = 'expense';
+        function switchInputType(type) {
+            currentInputType = type;
+            var tabs = ['expense', 'income', 'transfer'];
+            tabs.forEach(function (t) {
+                var tabEl = document.getElementById('tab-' + t);
+                if (tabEl) tabEl.classList.toggle('selected', t === type);
+            });
+            document.getElementById('expenseFields').style.display = type === 'expense' ? 'block' : 'none';
+            document.getElementById('incomeFields').style.display = type === 'income' ? 'block' : 'none';
+            document.getElementById('transferFields').style.display = type === 'transfer' ? 'block' : 'none';
+
+            var titleMap = { expense: '✏️ 支出を記録', income: '💰 収入を記録', transfer: '🏦 振替（貯蓄）を記録' };
+            document.getElementById('modalTitle').textContent = titleMap[type] || '記録';
+        }
+
+        /**
+         * カテゴリチップの選択
+         */
+        function selectCategory(el) {
+            document.querySelectorAll('.chip').forEach(function (c) {
+                c.classList.remove('selected');
+            });
+            el.classList.add('selected');
+            selectedCategory = el.getAttribute('data-cat');
+        }
+
+        /**
+         * 支出データの送信
+         */
+        function submitExpense() {
+            var memo = document.getElementById('inputMemo').value.trim();
+            var amount = document.getElementById('inputAmount').value.trim();
+            var dateVal = document.getElementById('inputDate').value;
+            var dateStr = dateVal ? dateVal.replace(/-/g, '/') : '';
+
+            // タイプに応じたカテゴリ・口座の取得
+            var type = currentInputType;
+            var cat = (type === 'income') ? '収入' : (type === 'transfer') ? '振替' : selectedCategory;
+            var accountSel = (type === 'income')
+                ? document.getElementById('incomeAccount')
+                : (type === 'transfer') ? document.getElementById('transferFromAccount')
+                    : document.getElementById('expenseAccount');
+            var account = accountSel ? accountSel.value : '';
+            var typeLabel = (type === 'income') ? '収入' : (type === 'transfer') ? '振替' : '支出';
+
+            if (!memo) {
+                showToast('品名を入力してください', true);
+                return;
+            }
+            if (!amount || parseInt(amount) <= 0) {
+                showToast('金額を入力してください', true);
+                return;
+            }
+
+            var btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '記録中...';
+
+            if (!GAS_API_URL && typeof google === 'undefined') {
+                setTimeout(function () {
+                    btn.disabled = false;
+                    btn.textContent = '記録する 📝';
+                    showToast('✅ (Localモック) ' + memo + ': ¥' + amount + ' を記録しました (' + typeLabel + ')');
+                    document.getElementById('inputMemo').value = '';
+                    document.getElementById('inputAmount').value = '';
+                    toggleInputModal();
+                }, 800);
+                return;
+            }
+
+            callGAS('addExpense', {
+                memo: memo,
+                amount: amount,
+                category: cat,
+                date: dateStr,
+                account: account,
+                type: typeLabel
+            })
+                .then(function (result) {
+                    btn.disabled = false;
+                    btn.textContent = '記録する 📝';
+
+                    if (result.success) {
+                        showToast('✅ ' + result.message);
+                        // フォームをリセット (日付以外)
+                        document.getElementById('inputMemo').value = '';
+                        document.getElementById('inputAmount').value = '';
+                        // モーダルを閉じる
+                        toggleInputModal();
+                        // ダッシュボードをリフレッシュ
+                        setTimeout(function () { loadData(currentYear, currentMonth); }, 500);
+                    } else {
+                        showToast('❌ ' + result.message, true);
+                    }
+                })
+                .catch(function (err) {
+                    btn.disabled = false;
+                    btn.textContent = '記録する 📝';
+                    showToast('❌ 通信エラー。もう一度お試しください。', true);
+                });
+        }
+
+        /**
+         * 全件表示（GASから月のデータを取得して表示）
+         */
+        function loadAllRecords() {
+            var btn = document.getElementById('loadAllRecordsBtn');
+            btn.textContent = '読込中...';
+            btn.disabled = true;
+
+            if (!GAS_API_URL && typeof google === 'undefined') {
+                setTimeout(function () {
+                    btn.textContent = '全件表示';
+                    btn.disabled = false;
+                    showToast('ローカルモードでは全件表示できません', true);
+                }, 500);
+                return;
+            }
+
+            callGAS('getMonthlyRecords', { year: currentYear, month: currentMonth + 1 })
+                .then(function (result) {
+                    btn.textContent = '全件表示';
+                    btn.disabled = false;
+                    if (result.success) {
+                        renderRecords(result.records);
+                        showToast('📋 ' + result.records.length + '件の記録を表示');
+                    } else {
+                        showToast('❌ ' + result.message, true);
+                    }
+                })
+                .catch(function (err) {
+                    btn.textContent = '全件表示';
+                    btn.disabled = false;
+                    showToast('❌ 通信エラー', true);
+                });
+        }
+</script>

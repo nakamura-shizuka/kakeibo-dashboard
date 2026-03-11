@@ -11,6 +11,17 @@
   "jsonExtensions": [
     ".json"
   ],
-  "filePushOrder": [],
+  "filePushOrder": [
+    "config.js",
+    "utils.js",
+    "data_access.js",
+    "settings.js",
+    "line_bot.js",
+    "ai_analysis.js",
+    "gmail_integration.js",
+    "triggers.js",
+    "dashboard_api.js",
+    "main.js"
+  ],
   "skipSubdirectories": false
 }
