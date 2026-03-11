@@ -3,4 +3,6 @@ node_modules/**
 .git/**
 package.json
 package-lock.json
-# build.js はGAS上でスタブとして存在（Node.js用の本物はここにある）
+build.js
+# build.js はGAS上でスタブとして存在するが、clasp pushで上書きされないよう除外
+# Node.js用の本物の build.js はローカルのみで使用（node build.js でdocs/index.htmlを生成）
