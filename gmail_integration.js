@@ -187,6 +187,12 @@ function writeCardRecord_(sheet, record) {
         '', // IsFixed
         ''  // Account (口座は後から設定可)
     ]);
+    try {
+        const dateParts = record.date.split('/');
+        if (dateParts.length === 3) {
+            invalidateDashboardCache(parseInt(dateParts[0], 10), parseInt(dateParts[1], 10) - 1);
+        }
+    } catch (e) { /* キャッシュ無効化失敗は無視 */ }
     return true; // 書き込み成功
 }
 

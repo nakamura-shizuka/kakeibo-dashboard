@@ -14,7 +14,7 @@ const path = require('path');
 // ============================================================
 // GAS Web App URL（GASエディタ > デプロイ > 新しいデプロイ で取得）
 // ============================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxcLOf_5N0FMq0RyrsYCS0ZNUp9tc4mXh5wx__CDjuYSwAy75XnTj0M227Ib8F064vO/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzsZ61S4xLGU8oMMkI4fALwUEEl5JPyyPNhILZlq3tCY7EBLxQk4JLG4Eb2jTYbOn9X/exec';
 // ============================================================
 
 if (GAS_URL.includes('REPLACE_WITH_YOUR_DEPLOYMENT_ID')) {

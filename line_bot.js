@@ -28,6 +28,10 @@ function processMessage(userMessage) {
 
     try {
         writeToSpreadsheet(memo, amount);
+        try {
+            const now = new Date();
+            invalidateDashboardCache(now.getFullYear(), now.getMonth());
+        } catch (e) { /* キャッシュ無効化失敗は無視 */ }
         return `✅ 記録完了！\n📦 ${memo}: ${amount.toLocaleString()}円\n家計簿にバッチリ追記しました🧾`;
     } catch (error) {
         console.error("記録エラー:", error);
