@@ -16,22 +16,22 @@
     <!-- ヘッダー -->
     <div class="header">
         <div class="header-inner">
-            <div>
-                <h1>🏠 みえる化家計簿</h1>
-                <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
-                    <button class="nav-btn" onclick="changeMonth(-1)"
-                        style="background:none; border:none; color:var(--text-secondary); cursor:pointer;">◀︎</button>
-                    <div class="month-label" id="monthLabel" style="margin: 0;">読み込み中...</div>
-                    <button class="nav-btn" onclick="changeMonth(1)"
-                        style="background:none; border:none; color:var(--text-secondary); cursor:pointer;">▶︎</button>
-                </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="nav-btn" onclick="changeMonth(-1)"
+                    style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem;">◀︎</button>
+                <div class="month-label" id="monthLabel" style="margin: 0;">読み込み中...</div>
+                <button class="nav-btn" onclick="changeMonth(1)"
+                    style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem;">▶︎</button>
             </div>
             <div class="header-actions">
-                <button class="settings-btn" onclick="requestAiAnalysis()" title="AIで分析する"
-                    style="font-size: 1.1rem; color: var(--accent);">💡</button>
                 <button class="settings-btn" onclick="openSettingsModal()" title="設定">⚙️</button>
-                <button class="refresh-btn" onclick="loadData(currentYear, currentMonth)" title="更新">🔄</button>
             </div>
+        </div>
+        <!-- タブナビゲーション -->
+        <div class="tab-nav" id="tabNav">
+            <button class="tab-btn active" data-tab="home" onclick="switchTab('home')">ホーム</button>
+            <button class="tab-btn" data-tab="records" onclick="switchTab('records')">記録</button>
+            <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">分析</button>
         </div>
     </div>
 
@@ -42,93 +42,120 @@
             <div class="loading-text">データを読み込んでいます...</div>
         </div>
 
-        <!-- 支出サマリーカード -->
-        <div class="card" id="summaryCard" style="display:none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div class="card-title" style="margin-bottom: 0;"><span class="icon">💰</span> 今月の支出</div>
-                <div id="carryOverBadge"
-                    style="font-size: 0.75rem; color: var(--text-secondary); background: rgba(0,0,0,0.03); padding: 4px 10px; border-radius: 12px; font-weight: 600;">
-                    🎁 繰越読込中...
+        <!-- ===== ホームタブ ===== -->
+        <div class="tab-content active" id="tab-home">
+            <!-- 支出サマリーカード -->
+            <div class="card" id="summaryCard" style="display:none;">
+                <div class="card-title" style="margin-bottom: 16px;">
+                    <span class="icon">💰</span> 今月の支出
+                </div>
+                <div class="summary-amount">
+                    <span class="currency">¥</span><span id="totalSpending">0</span>
+                </div>
+                <div class="summary-budget">予算 ¥<span id="budgetAmount">0</span> のうち <strong
+                        id="percentUsed">0%</strong> 使用
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill safe" id="progressFill"></div>
+                </div>
+                <div class="progress-label">
+                    <span>¥0</span>
+                    <span>¥<span id="budgetLabel">0</span></span>
+                </div>
+
+                <div class="mini-cards">
+                    <div class="mini-card">
+                        <div class="mini-label">今月の収入</div>
+                        <div class="mini-value green" id="totalIncome">¥0</div>
+                    </div>
+                    <div class="mini-card">
+                        <div class="mini-label">残りの予算</div>
+                        <div class="mini-value accent" id="remainBudget">¥0</div>
+                    </div>
+                </div>
+
+                <!-- 収支ステータス -->
+                <div class="balance-status" id="balanceStatus">
+                    <div class="balance-row">
+                        <span class="balance-label">今月の収支</span>
+                        <span class="balance-value" id="monthlyBalance">¥0</span>
+                    </div>
+                    <div class="balance-row">
+                        <span class="balance-label">累計貯蓄</span>
+                        <span class="balance-value" id="cumulativeSavings">¥0</span>
+                    </div>
                 </div>
             </div>
-            <div class="summary-amount">
-                <span class="currency">¥</span><span id="totalSpending">0</span>
-            </div>
-            <div class="summary-budget">予算 ¥<span id="budgetAmount">0</span> のうち <strong id="percentUsed">0%</strong> 使用
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill safe" id="progressFill"></div>
-            </div>
-            <div class="progress-label">
-                <span>¥0</span>
-                <span>¥<span id="budgetLabel">0</span></span>
+
+            <!-- カテゴリ別支出 -->
+            <div class="card" id="categoryCard" style="display:none;">
+                <div class="card-title"><span class="icon">🥧</span> カテゴリ別支出</div>
+                <div class="chart-container" id="pieChart"></div>
+                <div class="category-legend" id="categoryLegend"></div>
             </div>
 
-            <div class="mini-cards">
-                <div class="mini-card">
-                    <div class="mini-label">今月の収入</div>
-                    <div class="mini-value green" id="totalIncome">¥0</div>
+            <!-- 直近の記録（ホームタブ用：直近5件） -->
+            <div class="card" id="recentRecordsCard" style="display:none;">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><span class="icon">📋</span> 最近の記録</span>
+                    <button onclick="switchTab('records')"
+                        style="font-size:0.75rem; padding:4px 10px; border-radius:20px; border:1px solid var(--accent-primary); color:var(--accent); background:transparent; cursor:pointer;">もっと見る</button>
                 </div>
-                <div class="mini-card">
-                    <div class="mini-label">残りの予算</div>
-                    <div class="mini-value accent" id="remainBudget">¥0</div>
+                <ul class="record-list" id="recentRecordList"></ul>
+            </div>
+        </div>
+
+        <!-- ===== 記録タブ ===== -->
+        <div class="tab-content" id="tab-records">
+            <div class="card" id="recordsCard" style="display:none;">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><span class="icon">📋</span> 取引一覧</span>
+                    <button id="loadAllRecordsBtn" onclick="loadAllRecords()"
+                        style="font-size:0.75rem; padding:4px 10px; border-radius:20px; border:1px solid var(--accent); color:var(--accent); background:transparent; cursor:pointer;">全件表示</button>
+                </div>
+                <ul class="record-list" id="recordList"></ul>
+            </div>
+        </div>
+
+        <!-- ===== 分析タブ ===== -->
+        <div class="tab-content" id="tab-analysis">
+            <!-- AIアドバイスカード -->
+            <div class="card" id="aiAdviceCard"
+                style="display:none; background: linear-gradient(135deg, #f8f9fa, #ffffff); border: 2px solid #e2e8f0;">
+                <div class="card-title" style="color: #475569; margin-bottom: 8px;">
+                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <span><span class="icon" style="background: #e2e8f0;">🤖</span> 専属アナリストの分析結果</span>
+                        <span id="aiAnalysisLoading" style="display:none;font-size:0.8rem;color:#64748b;">分析中...</span>
+                    </div>
+                </div>
+                <div id="aiMessageText"
+                    style="font-size: 0.9rem; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap;">
+                </div>
+                <button class="ai-request-btn" onclick="requestAiAnalysis()"
+                    style="margin-top:12px; padding:10px 20px; border-radius:16px; border:none; background:linear-gradient(135deg, #475569, #64748b); color:#fff; font-size:0.85rem; font-weight:700; cursor:pointer; font-family:inherit;">
+                    💡 AI分析を実行
+                </button>
+            </div>
+
+            <!-- 年間収支レポート -->
+            <div class="card" id="yearlyReportCard" style="display:none;">
+                <div class="card-title"><span class="icon">📈</span> 年間収支レポート（<span
+                        id="yearlyChartYear"></span>年）</div>
+                <div class="chart-container" id="yearlyChart" style="height: 240px; margin-top: 10px; width: 100%;">
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- AIアドバイスカード -->
-    <div class="card" id="aiAdviceCard"
-        style="display:none; background: linear-gradient(135deg, #f8f9fa, #ffffff); border: 2px solid #e2e8f0;">
-        <div class="card-title" style="color: #475569; margin-bottom: 8px;">
-            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                <span><span class="icon" style="background: #e2e8f0;">🤖</span> 専属アナリストの分析結果</span>
-                <span id="aiAnalysisLoading" style="display:none;font-size:0.8rem;color:#64748b;">分析中...</span>
+        <!-- 空のステート -->
+        <div class="card" id="emptyState" style="display:none;">
+            <div class="empty-state">
+                <div class="empty-icon">📝</div>
+                <div class="empty-message">
+                    まだデータがありません。<br>
+                    LINEから「ランチ 1200」のように<br>送信して記録を始めましょう！
+                </div>
             </div>
         </div>
-        <div id="aiMessageText"
-            style="font-size: 0.9rem; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap;"></div>
-    </div>
-
-    <!-- カテゴリ別支出 -->
-    <div class="card" id="categoryCard" style="display:none;">
-        <div class="card-title"><span class="icon">🥧</span> カテゴリ別支出</div>
-        <div class="chart-container" id="pieChart"></div>
-        <div class="category-legend" id="categoryLegend"></div>
-    </div>
-
-    <!-- サンキーダイアグラム -->
-    <div class="card" id="sankeyCard" style="display:none;">
-        <div class="card-title"><span class="icon">🌊</span> お金の流れ</div>
-        <div class="sankey-container" id="sankeyChart"></div>
-    </div>
-
-    <!-- 年間収支レポート -->
-    <div class="card" id="yearlyReportCard" style="display:none;">
-        <div class="card-title"><span class="icon">📈</span> 年間収支レポート（<span id="yearlyChartYear"></span>年）</div>
-        <div class="chart-container" id="yearlyChart" style="height: 240px; margin-top: 10px; width: 100%;"></div>
-    </div>
-
-    <!-- 直近の記録 -->
-    <div class="card" id="recordsCard" style="display:none;">
-        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-            <span><span class="icon">📋</span> 最近の記録</span>
-            <button id="loadAllRecordsBtn" onclick="loadAllRecords()"
-                style="font-size:0.75rem; padding:4px 10px; border-radius:20px; border:1px solid var(--accent-primary); color:var(--accent-primary); background:transparent; cursor:pointer;">全件表示</button>
-        </div>
-        <ul class="record-list" id="recordList"></ul>
-    </div>
-
-    <!-- 空のステート -->
-    <div class="card" id="emptyState" style="display:none;">
-        <div class="empty-state">
-            <div class="empty-icon">📝</div>
-            <div class="empty-message">
-                まだデータがありません。<br>
-                LINEから「ランチ 1200」のように<br>送信して記録を始めましょう！
-            </div>
-        </div>
-    </div>
     </div>
 
     <!-- FABボタン（入力ボタン） -->
@@ -149,18 +176,24 @@
             <button class="chip" id="tab-income" style="flex:1; font-size:0.85rem;"
                 onclick="switchInputType('income')">💰 収入</button>
             <button class="chip" id="tab-transfer" style="flex:1; font-size:0.85rem;"
-                onclick="switchInputType('transfer')">🏦 振替（貯蓄）</button>
+                onclick="switchInputType('transfer')">🏦 振替</button>
         </div>
 
-        <div class="input-row" style="margin-bottom: 12px;">
-            <input type="date" class="input-field" id="inputDate" style="flex: 0 0 140px; color: var(--text-main);">
+        <!-- 日付（デフォルト非表示、リンクで展開） -->
+        <div id="dateToggleRow" style="margin-bottom: 12px;">
+            <a href="javascript:void(0)" onclick="toggleDateInput()" id="dateToggleLink"
+                style="font-size:0.8rem; color:var(--text-muted);">📅 日付を変更</a>
+            <div id="dateInputRow" class="input-row" style="display:none; margin-top:8px; margin-bottom:0;">
+                <input type="date" class="input-field" id="inputDate" style="flex: 0 0 140px; color: var(--text-main);">
+            </div>
         </div>
+
         <div class="input-row">
             <input type="text" class="input-field" id="inputMemo" placeholder="品名（例：ランチ）" autocomplete="off">
             <input type="number" class="input-field amount" id="inputAmount" placeholder="金額" inputmode="numeric">
         </div>
 
-        <!-- 支出タブ用: カテゴリと支払い元 -->
+        <!-- 支出タブ用: カテゴリのみ（口座選択削除） -->
         <div id="expenseFields">
             <div class="category-chips" id="categoryChips">
                 <button class="chip selected" data-cat="未分類" onclick="selectCategory(this)">📦 未分類</button>
@@ -172,40 +205,16 @@
                 <button class="chip" data-cat="衣服" onclick="selectCategory(this)">👕 衣服</button>
                 <button class="chip" data-cat="通信費" onclick="selectCategory(this)">📱 通信費</button>
             </div>
-            <div class="input-row" style="margin-top: 10px;" id="expenseAccountRow">
-                <label style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">🏦 支払い元</label>
-                <select id="expenseAccount" class="input-field" style="flex:1; color:var(--text-primary);">
-                    <option value="">-- 口座を選択 --</option>
-                </select>
-            </div>
         </div>
 
-        <!-- 収入タブ用: 入金先 -->
+        <!-- 収入タブ用 -->
         <div id="incomeFields" style="display:none;">
             <div style="font-size:0.8rem; color:var(--text-muted); margin:8px 0 4px;">例：給与・副業収入・還付金など</div>
-            <div class="input-row" style="margin-top: 6px;">
-                <label style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">🏦 入金先</label>
-                <select id="incomeAccount" class="input-field" style="flex:1; color:var(--text-primary);">
-                    <option value="">-- 口座を選択 --</option>
-                </select>
-            </div>
         </div>
 
         <!-- 振替（貯蓄）タブ用 -->
         <div id="transferFields" style="display:none;">
             <div style="font-size:0.8rem; color:var(--text-muted); margin:8px 0 4px;">例：NISA積立・銀行振込・現金引き出しなど</div>
-            <div class="input-row" style="margin-top: 6px;">
-                <label style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">↑ 移動元</label>
-                <select id="transferFromAccount" class="input-field" style="flex:1; color:var(--text-primary);">
-                    <option value="">-- 口座を選択 --</option>
-                </select>
-            </div>
-            <div class="input-row" style="margin-top: 6px;">
-                <label style="font-size:0.8rem; color:var(--text-secondary); white-space:nowrap;">↓ 振替先</label>
-                <select id="transferToAccount" class="input-field" style="flex:1; color:var(--text-primary);">
-                    <option value="">-- 口座を選択 --</option>
-                </select>
-            </div>
         </div>
 
         <button class="submit-btn" id="submitBtn" onclick="submitExpense()">記録する 📝</button>
@@ -250,22 +259,6 @@
             </div>
         </div>
 
-        <div style="margin-bottom: 24px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <label style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700;">🏦 口座（資産）の管理</label>
-                <button class="chip" style="padding: 4px 12px; font-size: 0.75rem; margin-bottom:0;"
-                    onclick="addAccountRow()">＋ 追加</button>
-            </div>
-            <div id="accountsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
-            <div
-                style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; line-height: 1.5; background: #F8FAFC; padding: 10px; border-radius: 8px;">
-                💡 <b>口座の管理について</b><br>
-                ・<b>口座名</b>：「お財布」「三井住友銀行」「PayPay」など、支払いや収入の出入り口となる名前を自由に入力します。<br>
-                ・<b>現在残高</b>：<b>「いま現在、その口座（財布）にいくらお金が入っているか」</b> をそのまま入力してください。（例：貯金が20万円あるなら「200000」と入力します）。<br>
-                ※ここに書いた金額を基準として、日々の収入や支出が自動で足し引きされていきます。
-            </div>
-        </div>
-
         <div style="display: flex; gap: 12px;">
             <button class="submit-btn"
                 style="flex: 1; background: #E2E8F0; color: var(--text-primary); box-shadow: none;"
@@ -277,9 +270,8 @@
     <!-- トースト通知 -->
     <div class="toast" id="toast"></div>
 
-    <!-- D3.js -->
+    <!-- D3.js（円グラフ・年間レポート用、サンキー不要） -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
     <!-- Marked.js for Markdown parsing -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <?!= include('helpers'); ?>

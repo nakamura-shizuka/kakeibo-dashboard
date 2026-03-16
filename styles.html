@@ -8,57 +8,35 @@
         }
 
         :root {
-            /* Kawaii & Clean テーマ（ライトパステル） */
             --bg-primary: #FAFAFB;
-            /* ほんのりグレーがかった白背景 */
             --bg-card: rgba(255, 255, 255, 0.95);
             --bg-card-hover: rgba(255, 255, 255, 1);
             --border-card: rgba(0, 0, 0, 0.04);
             --card-shadow: 0 8px 24px rgba(100, 110, 140, 0.08);
-            /* 柔らかいシャドウ */
 
             --text-primary: #334155;
-            /* スレート系の柔らかい黒 */
             --text-secondary: #64748B;
-            /* 中間色のグレー */
             --text-muted: #94A3B8;
-            /* 薄いグレー */
 
             --accent: #FF8FAD;
-            /* パステルピンク（メインカラー） */
             --accent-light: #FFB3C6;
-            /* 明るいピンク */
             --accent-glow: rgba(255, 143, 173, 0.25);
 
             --danger: #FF7E7E;
-            /* 柔らかい赤 */
             --warning: #FFC074;
-            /* 柔らかいオレンジ */
             --safe-green: #6EE7B7;
-            /* パステルミントグリーン */
             --income-green: #34D399;
-            /* もう少しはっきりしたグリーン */
 
-            /* D3.jsやカテゴリ用パステルパレット */
             --chart-1: #FF9CEE;
-            /* ピンク */
             --chart-2: #B28DFF;
-            /* パープル */
             --chart-3: #6EB5FF;
-            /* ブルー */
             --chart-4: #85E3FF;
-            /* 水色 */
             --chart-5: #AFF8D8;
-            /* ミント */
             --chart-6: #E7FFAC;
-            /* ライム */
             --chart-7: #FFF5BA;
-            /* イエロー */
             --chart-8: #FFABAB;
-            /* サーモン */
         }
 
-        /* GASバナー「このアプリケーションは...」を非表示 */
         #top_nav,
         .apps-script-banner,
         div[role="banner"] {
@@ -66,7 +44,6 @@
         }
 
         body {
-            /* 日本語は丸ゴシック、数字は丸みのある英書体 */
             font-family: 'Nunito', 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
@@ -80,10 +57,10 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: linear-gradient(180deg, rgba(250, 250, 251, 0.95) 60%, transparent);
+            background: linear-gradient(180deg, rgba(250, 250, 251, 0.98) 80%, transparent);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            padding: 16px 20px 24px;
+            padding: 12px 20px 0;
         }
 
         .header-inner {
@@ -92,63 +69,70 @@
             justify-content: space-between;
         }
 
-        .header h1 {
-            font-size: 1.3rem;
-            font-weight: 800;
-            /* よりぽってりした太さ */
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
         .header .month-label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-            margin-top: 2px;
+            font-size: 1rem;
+            color: var(--text-primary);
+            font-weight: 700;
         }
 
-        .refresh-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 20px;
-            border: none;
-            background: #fff;
-            color: var(--text-secondary);
-            font-size: 1.2rem;
-            cursor: pointer;
+        /* ===== タブナビゲーション ===== */
+        .tab-nav {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            /* ボタンにも影 */
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            /* ぽよんとした動き */
+            gap: 4px;
+            margin-top: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-card);
         }
 
-        .refresh-btn:active {
-            transform: scale(0.9) rotate(90deg);
-            background: var(--bg-primary);
+        .tab-btn {
+            flex: 1;
+            padding: 8px 4px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .tab-btn:not(.active):hover {
+            background: rgba(0, 0, 0, 0.03);
+            color: var(--text-secondary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
 
         /* ===== カードコンポーネント ===== */
         .container {
-            padding: 0 16px;
+            padding: 16px 16px 0;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            /* カード間隔を少し広げる */
         }
 
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border-card);
             border-radius: 24px;
-            /* より丸く */
             padding: 24px;
             box-shadow: var(--card-shadow);
-            /* ふんわりシャドウ */
             transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s;
             opacity: 0;
             transform: translateY(20px);
@@ -183,7 +167,6 @@
         /* ===== 支出サマリーカード ===== */
         .summary-amount {
             font-size: 2.5rem;
-            /* ちょっと大きく */
             font-weight: 800;
             line-height: 1.1;
             margin-bottom: 8px;
@@ -206,7 +189,6 @@
 
         .progress-bar {
             height: 16px;
-            /* 余裕がわかりやすいように太く */
             background: rgba(0, 0, 0, 0.04);
             border-radius: 8px;
             overflow: hidden;
@@ -267,7 +249,6 @@
 
         .mini-card {
             background: #fff;
-            /* 独立したカード感を出す */
             border: 1px solid var(--border-card);
             border-radius: 16px;
             padding: 16px;
@@ -296,11 +277,50 @@
             color: var(--accent);
         }
 
+        .mini-card .mini-value.danger {
+            color: var(--danger);
+        }
+
+        /* ===== 収支ステータス ===== */
+        .balance-status {
+            margin-top: 16px;
+            background: #F8FAFC;
+            border-radius: 16px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .balance-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .balance-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .balance-value {
+            font-size: 1rem;
+            font-weight: 800;
+        }
+
+        .balance-value.positive {
+            color: var(--income-green);
+        }
+
+        .balance-value.negative {
+            color: var(--danger);
+        }
+
         /* ===== カテゴリ別（円グラフ） ===== */
         .chart-container {
             width: 100%;
             height: 240px;
-            /* 少し大きく */
             position: relative;
         }
 
@@ -337,12 +357,6 @@
             font-weight: 700;
         }
 
-        /* ===== サンキーダイアグラム ===== */
-        .sankey-container {
-            width: 100%;
-            height: 260px;
-        }
-
         /* ===== 取引履歴 ===== */
         .record-list {
             list-style: none;
@@ -374,7 +388,6 @@
 
         .record-icon {
             width: 44px;
-            /* タップ領域・視認性考慮して大きく */
             height: 44px;
             border-radius: 14px;
             background: var(--bg-primary);
@@ -474,7 +487,6 @@
             font-weight: 500;
         }
 
-        /* ===== カウントアップアニメーション ===== */
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -487,18 +499,16 @@
             }
         }
 
-        /* ===== Google Charts のスタイル上書き ===== */
         .card text {
             fill: var(--text-secondary) !important;
         }
 
-        /* ===== FABボタン（入力ボタン） ===== */
+        /* ===== FABボタン ===== */
         .fab {
             position: fixed;
             bottom: 30px;
             right: 24px;
             width: 64px;
-            /* タップしやすく大きく */
             height: 64px;
             border-radius: 32px;
             border: none;
@@ -525,7 +535,7 @@
             box-shadow: 0 8px 24px rgba(255, 126, 126, 0.3);
         }
 
-        /* ===== モーダルオーバーレイ ===== */
+        /* ===== モーダル ===== */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -533,7 +543,6 @@
             right: 0;
             bottom: 0;
             background: rgba(30, 41, 59, 0.5);
-            /* ネイビー系のオーバーレイ */
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             z-index: 150;
@@ -547,7 +556,6 @@
             pointer-events: auto;
         }
 
-        /* ===== 入力モーダル ===== */
         .input-modal {
             position: fixed;
             bottom: 0;
@@ -556,18 +564,14 @@
             background: #ffffff;
             border-top: 1px solid var(--border-card);
             border-radius: 32px 32px 0 0;
-            /* 大きめにとった角丸 */
             padding: 24px 24px 40px;
             z-index: 160;
             transform: translateY(100%);
             transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.08);
             max-height: 90vh;
-            /* 画面の90%まで */
             overflow-y: auto;
-            /* 縦スクロール有効 */
             overscroll-behavior: contain;
-            /* スクロール連鎖防止 */
         }
 
         .input-modal.active {
@@ -601,9 +605,7 @@
         .input-field {
             flex: 1;
             background: #F8FAFC;
-            /* ごく薄いグレー */
             border: 2px solid transparent;
-            /* 初期はボーダーレスにみせる */
             border-radius: 16px;
             padding: 14px 16px;
             color: var(--text-primary);
@@ -631,15 +633,14 @@
             font-size: 1.2rem;
         }
 
-        /* ===== 設定ボタンとテキストエリアUI ===== */
+        /* ===== 設定ボタン ===== */
         .header-actions {
             display: flex;
             gap: 12px;
             align-items: center;
         }
 
-        .settings-btn,
-        .refresh-btn {
+        .settings-btn {
             background: #ffffff;
             border: 1px solid var(--border-card);
             border-radius: 12px;
@@ -654,8 +655,7 @@
             transition: all 0.2s;
         }
 
-        .settings-btn:active,
-        .refresh-btn:active {
+        .settings-btn:active {
             transform: scale(0.9);
             box-shadow: none;
         }
@@ -696,7 +696,6 @@
             font-weight: 800;
         }
 
-        /* カンマ区切りのテキストエリア */
         textarea.input-styled {
             width: 100%;
             background: #F8FAFC;
@@ -811,7 +810,7 @@
             color: var(--danger);
         }
 
-        /* ===== レコード編集フォーム SP対応 ===== */
+        /* ===== レスポンシブ ===== */
         @media (max-width: 480px) {
             .record-item {
                 padding: 10px 0;
@@ -819,6 +818,9 @@
             .record-info {
                 word-break: break-word;
                 overflow-wrap: break-word;
+            }
+            .balance-status {
+                padding: 10px 12px;
             }
         }
 </style>
