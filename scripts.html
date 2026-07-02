@@ -56,22 +56,59 @@
 
         // API token 管理（localStorage 保存。GAS 側の API_TOKEN プロパティと照合される）
         // 入力を求めるのはサーバーが unauthorized を返したときだけ（通常時はプロンプトを出さない）
-        var apiTokenPromptShown = false;
+        // localStorage が使えない環境（ショートカットの一時Webビュー等）向けにメモリ上にも保持する
+        var sessionToken = '';
+
+        // URLフラグメント #token=xxx からトークンを受け取る（iOSショートカット等で毎回入力を省くため）
+        // フラグメントはサーバーに送信されないため URL 埋め込みでも比較的安全
+        (function () {
+            try {
+                var m = (window.location.hash || '').match(/[#&]token=([^&]+)/);
+                if (m) {
+                    sessionToken = decodeURIComponent(m[1]);
+                    try { localStorage.setItem('kakeibo_api_token', sessionToken); } catch (e) { /* ignore */ }
+                    history.replaceState(null, '', window.location.pathname + window.location.search);
+                }
+            } catch (e) { /* ignore */ }
+        })();
+
         function getApiToken_() {
+            if (sessionToken) return sessionToken;
             try { return localStorage.getItem('kakeibo_api_token') || ''; } catch (e) { return ''; /* private mode 等 */ }
         }
 
         function clearApiToken_() {
+            sessionToken = '';
             try { localStorage.removeItem('kakeibo_api_token'); } catch (e) { /* ignore */ }
         }
 
         function promptApiToken_() {
             var input = window.prompt('APIトークンを入力してください（GASのスクリプトプロパティ API_TOKEN と同じ値）');
             if (input && input.trim()) {
-                try { localStorage.setItem('kakeibo_api_token', input.trim()); } catch (e) { /* ignore */ }
+                sessionToken = input.trim();
+                try { localStorage.setItem('kakeibo_api_token', sessionToken); } catch (e) { /* ignore */ }
                 return true;
             }
             return false;
+        }
+
+        // 同時に複数のAPIが unauthorized になっても入力ダイアログは1回だけ出し、
+        // 全ての呼び出し元が入力完了を待ってからリトライできるようにする
+        var tokenPromptPromise = null;
+        var tokenPromptDone = false;
+        function requestApiToken_() {
+            if (tokenPromptDone) return Promise.resolve(false); // 入力済みでも失敗 = トークン不一致。再プロンプトしない
+            if (!tokenPromptPromise) {
+                tokenPromptPromise = new Promise(function (resolve) {
+                    // prompt() はスレッドをブロックするため、先に他の呼び出し元がこの Promise に連なれるよう遅延する
+                    setTimeout(function () {
+                        var ok = promptApiToken_();
+                        tokenPromptDone = true;
+                        resolve(ok);
+                    }, 0);
+                });
+            }
+            return tokenPromptPromise;
         }
 
         /**
@@ -90,16 +127,13 @@
                 return res.json();
             }).then(function (json) {
                 if (json && json.error === 'unauthorized') {
-                    // トークン未設定/不一致: その場で一度だけ入力を求め、成功すればリトライ
+                    // トークン未設定/不一致: 一度だけ入力を求め、入力完了を待ってから全呼び出しをリトライ
                     clearApiToken_();
-                    if (!apiTokenPromptShown) {
-                        apiTokenPromptShown = true;
-                        if (promptApiToken_()) {
-                            return callGAS(action, params, 0);
-                        }
-                        showToast('APIトークンが未入力のため操作できません。画面を更新して再入力してください。', true);
-                    }
-                    throw new Error('unauthorized');
+                    return requestApiToken_().then(function (entered) {
+                        if (entered) return callGAS(action, params, 0);
+                        showToast('APIトークンが未入力または無効です。画面を更新して再入力してください。', true);
+                        throw new Error('unauthorized');
+                    });
                 }
                 return json;
             }).catch(function (err) {
