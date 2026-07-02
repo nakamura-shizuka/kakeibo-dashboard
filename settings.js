@@ -25,13 +25,18 @@ function getSettingsData() {
             if (savedCats) categories = savedCats;
         }
 
+        const warnings = [];
+
         let fixedExpenses = [];
         if (sheet.getRange('F6').getValue() === 'Fixed_Expenses') {
             const savedStr = sheet.getRange('G6').getValue();
             if (savedStr) {
                 try {
                     fixedExpenses = JSON.parse(savedStr);
-                } catch (e) { console.warn('固定費設定パース失敗:', e.message); }
+                } catch (e) {
+                    logError('固定費設定パース失敗', e.message + ' / 保存値: ' + savedStr);
+                    warnings.push('固定費設定の読み込みに失敗しました');
+                }
             }
         }
 
@@ -41,13 +46,19 @@ function getSettingsData() {
             if (accStr) {
                 try {
                     accounts = JSON.parse(accStr);
-                } catch (e) { console.warn('口座設定パース失敗:', e.message); }
+                } catch (e) {
+                    logError('口座設定パース失敗', e.message + ' / 保存値: ' + accStr);
+                    warnings.push('口座設定の読み込みに失敗しました');
+                }
             }
         }
 
-        return { budget: budget, categories: categories, fixedExpenses: fixedExpenses, accounts: accounts };
+        const result = { budget: budget, categories: categories, fixedExpenses: fixedExpenses, accounts: accounts };
+        if (warnings.length > 0) result.warning = warnings.join(' / ');
+        return result;
     } catch (e) {
-        return { budget: DEFAULT_MONTHLY_BUDGET, categories: "", fixedExpenses: [], accounts: [] };
+        logError('設定データ取得失敗', e.stack || e.message);
+        return { budget: DEFAULT_MONTHLY_BUDGET, categories: "", fixedExpenses: [], accounts: [], warning: '設定データの取得に失敗しました' };
     }
 }
 

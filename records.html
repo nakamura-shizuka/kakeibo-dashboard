@@ -148,10 +148,11 @@
                                     showToast('❌ ' + result.message, true);
                                 }
                             })
-                            .catch(function () {
+                            .catch(function (err) {
+                                console.error('記録の更新に失敗:', err);
                                 btn.textContent = '保存';
                                 btn.disabled = false;
-                                showToast('❌ 通信エラー', true);
+                                showToast('❌ 通信エラー (' + err.message + ')', true);
                             });
                     });
                 })(rowIndex, editDiv, rec);

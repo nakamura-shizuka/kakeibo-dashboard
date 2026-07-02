@@ -19,6 +19,10 @@ function doPost(e) {
 
     // ダッシュボード API（actionフィールドがある場合）
     if (bodyJson.action) {
+        if (!checkApiToken_(bodyJson.token)) {
+            return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'unauthorized' }))
+                .setMimeType(ContentService.MimeType.JSON);
+        }
         let result;
         try {
             switch (bodyJson.action) {
@@ -72,6 +76,7 @@ function doPost(e) {
                     result = { success: false, message: '不明なaction: ' + bodyJson.action };
             }
         } catch (err) {
+            logError('APIエラー(doPost): ' + bodyJson.action, err.stack || err.message);
             result = { success: false, message: 'APIエラー: ' + err.message };
         }
         return ContentService.createTextOutput(JSON.stringify(result))
@@ -137,6 +142,10 @@ function doGet(e) {
 
     // JSON APIルーター
     if (action) {
+        if (!checkApiToken_(e.parameter.token)) {
+            return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'unauthorized' }))
+                .setMimeType(ContentService.MimeType.JSON);
+        }
         let result;
         try {
             switch (action) {
@@ -196,6 +205,7 @@ function doGet(e) {
                     result = { success: false, message: '不明なaction: ' + action };
             }
         } catch (err) {
+            logError('APIエラー(doGet): ' + action, err.stack || err.message);
             result = { success: false, message: 'APIエラー: ' + err.message };
         }
         return ContentService.createTextOutput(JSON.stringify(result))

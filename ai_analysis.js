@@ -55,7 +55,7 @@ function generateAiAnalysis(isWeekly) {
             if (rYear === currentYear && rMonth === currentMonth) {
                 currentPeriodExpense += amount;
                 currentCategoryMap[category] = (currentCategoryMap[category] || 0) + amount;
-            } else if (rYear === currentYear && rMonth === currentMonth - 1 || (currentMonth === 0 && rYear === currentYear - 1 && rMonth === 11)) {
+            } else if ((rYear === currentYear && rMonth === currentMonth - 1) || (currentMonth === 0 && rYear === currentYear - 1 && rMonth === 11)) {
                 previousPeriodExpense += amount;
                 previousCategoryMap[category] = (previousCategoryMap[category] || 0) + amount;
             }

@@ -188,13 +188,14 @@
                         invalidateCache();
                         loadData(currentYear, currentMonth);
                     } else {
-                        showToast('保存エラー: ' + res.error, true);
+                        showToast('保存エラー: ' + (res.error || '原因不明'), true);
                     }
                 })
-                .catch(function () {
+                .catch(function (err) {
+                    console.error('設定保存に失敗:', err);
                     btn.disabled = false;
                     btn.textContent = originalText;
-                    showToast('通信エラーが発生しました', true);
+                    showToast('通信エラーが発生しました (' + err.message + ')', true);
                 });
         }
 
@@ -348,10 +349,11 @@
                         showToast(result.message, true);
                     }
                 })
-                .catch(function () {
+                .catch(function (err) {
+                    console.error('記録の送信に失敗:', err);
                     btn.disabled = false;
                     btn.textContent = '記録する 📝';
-                    showToast('通信エラー。もう一度お試しください。', true);
+                    showToast('通信エラー。もう一度お試しください。(' + err.message + ')', true);
                 });
         }
 
@@ -384,9 +386,10 @@
                     }
                 })
                 .catch(function (err) {
+                    console.error('全件取得に失敗:', err);
                     btn.textContent = '全件表示';
                     btn.disabled = false;
-                    showToast('❌ 通信エラー', true);
+                    showToast('❌ 通信エラー (' + err.message + ')', true);
                 });
         }
 </script>
