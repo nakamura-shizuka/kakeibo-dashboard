@@ -21,6 +21,21 @@ function isTestToken(token) {
 }
 
 /**
+ * ダッシュボードAPI用トークンを検証する
+ * スクリプトプロパティ API_TOKEN が未設定の間は認証をスキップする（移行措置・fail-open）
+ * @param {string} token - リクエストに含まれるトークン
+ * @returns {boolean} 許可するなら true
+ */
+function checkApiToken_(token) {
+    const expected = (PROPERTIES.getProperty('API_TOKEN') || "").trim();
+    if (!expected) {
+        console.warn('API_TOKEN が未設定のため認証をスキップしています。スクリプトプロパティに API_TOKEN を設定してください。');
+        return true;
+    }
+    return typeof token === 'string' && token.trim() === expected;
+}
+
+/**
  * エラーをスプレッドシートに記録する
  */
 function logError(errorType, details) {

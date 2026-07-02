@@ -10,7 +10,6 @@
         href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&family=Nunito:wght@400;600;700;800&display=swap"
         rel="stylesheet">
     <style>
-    <style>
         /* ===== リセット & ベース ===== */
         * {
             margin: 0;
@@ -1100,6 +1099,10 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <!-- Marked.js for Markdown parsing -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify: AI分析結果(LLM出力)のHTMLサニタイズ用 -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+    <!-- GAS配信時のみテンプレート評価で exec URL が入る。静的ビルドでは未評価のまま残り、scripts側のガードで無視される -->
+    <script>window.__GAS_EXEC_URL = '<?= ScriptApp.getService().getUrl() ?>';</script>
     <script>
         // ===== ヘルパー関数 =====
 
@@ -1559,10 +1562,11 @@
                                     showToast('❌ ' + result.message, true);
                                 }
                             })
-                            .catch(function () {
+                            .catch(function (err) {
+                                console.error('記録の更新に失敗:', err);
                                 btn.textContent = '保存';
                                 btn.disabled = false;
-                                showToast('❌ 通信エラー', true);
+                                showToast('❌ 通信エラー (' + err.message + ')', true);
                             });
                     });
                 })(rowIndex, editDiv, rec);
@@ -1765,13 +1769,14 @@
                         invalidateCache();
                         loadData(currentYear, currentMonth);
                     } else {
-                        showToast('保存エラー: ' + res.error, true);
+                        showToast('保存エラー: ' + (res.error || '原因不明'), true);
                     }
                 })
-                .catch(function () {
+                .catch(function (err) {
+                    console.error('設定保存に失敗:', err);
                     btn.disabled = false;
                     btn.textContent = originalText;
-                    showToast('通信エラーが発生しました', true);
+                    showToast('通信エラーが発生しました (' + err.message + ')', true);
                 });
         }
 
@@ -1925,10 +1930,11 @@
                         showToast(result.message, true);
                     }
                 })
-                .catch(function () {
+                .catch(function (err) {
+                    console.error('記録の送信に失敗:', err);
                     btn.disabled = false;
                     btn.textContent = '記録する 📝';
-                    showToast('通信エラー。もう一度お試しください。', true);
+                    showToast('通信エラー。もう一度お試しください。(' + err.message + ')', true);
                 });
         }
 
@@ -1961,9 +1967,10 @@
                     }
                 })
                 .catch(function (err) {
+                    console.error('全件取得に失敗:', err);
                     btn.textContent = '全件表示';
                     btn.disabled = false;
-                    showToast('❌ 通信エラー', true);
+                    showToast('❌ 通信エラー (' + err.message + ')', true);
                 });
         }
 </script>
@@ -1986,8 +1993,12 @@
         var currentTab = 'home';
         var tabDataLoaded = { home: false, records: false, analysis: false };
 
-        // GAS Web App API URL（build.js がビルド時に置換）
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxcLOf_5N0FMq0RyrsYCS0ZNUp9tc4mXh5wx__CDjuYSwAy75XnTj0M227Ib8F064vO/exec';
+        // GAS Web App API URL（build.js がビルド時に置換。GAS配信時は未置換のためテンプレートが注入した exec URL にフォールバック）
+        var GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxcLOf_5N0FMq0RyrsYCS0ZNUp9tc4mXh5wx__CDjuYSwAy75XnTj0M227Ib8F064vO/exec';
+        if (GAS_API_URL.indexOf('%%') === 0) {
+            var injectedUrl = window.__GAS_EXEC_URL || '';
+            GAS_API_URL = (injectedUrl && injectedUrl.indexOf('<' + '?') !== 0) ? injectedUrl : '';
+        }
 
         // sessionStorage キャッシュ
         function getCacheKey(action, year, month) {
@@ -2020,21 +2031,56 @@
             } catch (e) { /* ignore */ }
         }
 
+        // API token 管理（localStorage 保存。GAS 側の API_TOKEN プロパティと照合される）
+        // 入力を求めるのはサーバーが unauthorized を返したときだけ（通常時はプロンプトを出さない）
+        var apiTokenPromptShown = false;
+        function getApiToken_() {
+            try { return localStorage.getItem('kakeibo_api_token') || ''; } catch (e) { return ''; /* private mode 等 */ }
+        }
+
+        function clearApiToken_() {
+            try { localStorage.removeItem('kakeibo_api_token'); } catch (e) { /* ignore */ }
+        }
+
+        function promptApiToken_() {
+            var input = window.prompt('APIトークンを入力してください（GASのスクリプトプロパティ API_TOKEN と同じ値）');
+            if (input && input.trim()) {
+                try { localStorage.setItem('kakeibo_api_token', input.trim()); } catch (e) { /* ignore */ }
+                return true;
+            }
+            return false;
+        }
+
         /**
          * GAS API 共通呼び出しラッパー（リトライ機構付き）
          */
         function callGAS(action, params, retries) {
             if (retries === undefined) retries = 2;
-            var body = Object.assign({ action: action }, params || {});
+            var body = Object.assign({ action: action, token: getApiToken_() }, params || {});
 
             return fetch(GAS_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(body)
             }).then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 return res.json();
+            }).then(function (json) {
+                if (json && json.error === 'unauthorized') {
+                    // トークン未設定/不一致: その場で一度だけ入力を求め、成功すればリトライ
+                    clearApiToken_();
+                    if (!apiTokenPromptShown) {
+                        apiTokenPromptShown = true;
+                        if (promptApiToken_()) {
+                            return callGAS(action, params, 0);
+                        }
+                        showToast('APIトークンが未入力のため操作できません。画面を更新して再入力してください。', true);
+                    }
+                    throw new Error('unauthorized');
+                }
+                return json;
             }).catch(function (err) {
-                if (retries > 0) {
+                if (retries > 0 && err.message !== 'unauthorized') {
                     var delay = 1000 * (3 - retries);
                     return new Promise(function (resolve) {
                         setTimeout(resolve, delay);
@@ -2053,7 +2099,12 @@
                     currentSettings = res;
                     if (!currentSettings.fixedExpenses) currentSettings.fixedExpenses = [];
                 }
-            }).catch(function () { });
+                if (res && res.warning) {
+                    showToast(res.warning, true);
+                }
+            }).catch(function (err) {
+                console.error('設定情報の取得に失敗:', err);
+            });
         }
 
         /**
@@ -2355,7 +2406,12 @@
                     if (loadingSpan) loadingSpan.style.display = 'none';
                     if (result.success) {
                         try {
-                            msgArea.innerHTML = marked.parse(result.analysis); // Markdown HTML rendering (trusted source: GAS API)
+                            // LLM(Gemini)出力はサニタイズ必須。DOMPurify 未ロード時はプレーンテキスト表示
+                            if (typeof DOMPurify !== 'undefined') {
+                                msgArea.innerHTML = DOMPurify.sanitize(marked.parse(result.analysis));
+                            } else {
+                                msgArea.textContent = result.analysis;
+                            }
                         } catch (e) {
                             msgArea.textContent = result.analysis;
                         }
@@ -2367,9 +2423,10 @@
                         showToast(result.message, true);
                     }
                 })
-                .catch(function () {
+                .catch(function (err) {
+                    console.error('AI分析の取得に失敗:', err);
                     if (loadingSpan) loadingSpan.style.display = 'none';
-                    msgArea.textContent = "通信エラーが発生しました。";
+                    msgArea.textContent = "通信エラーが発生しました。(" + err.message + ")";
                     showToast('通信エラー', true);
                 });
         }

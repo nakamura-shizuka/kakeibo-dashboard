@@ -1,0 +1,8 @@
+# OS
+.DS_Store
+
+# Node.js
+node_modules/
+
+# Claude Code（ローカル設定）
+.claude/
