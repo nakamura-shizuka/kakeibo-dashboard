@@ -14,7 +14,8 @@
 // - 三井住友カード: statement@vpass.ne.jp
 //   件名「お支払い金額のお知らせ」（毎月26日頃・翌月10日支払分）
 //   ※Vpass設定で金額表示をオンにしていない場合、本文に金額が含まれない。
-//     その場合は金額0円のプレースホルダ行を作成してLINEで手入力を促す。
+//     その場合は利用通知メール（全件届く）から取り込んだ明細の締め期間合計で自動推定する。
+//     推定もできない場合のみプレースホルダ行を作成してLINEで手入力を促す。
 
 /**
  * 🗂️ Layer 1 用シート（月次確定・残高）を初期化して返す
@@ -110,7 +111,7 @@ function parseBillingEmail_(subject, body, sender, msgDate) {
  * 重複キー: BillingMonth + Card。
  * - 既存と同額: スキップ
  * - 金額が異なる: 上書き（請求額の訂正メール・手入力修正に対応）
- * - ただし手入力（manual）の値をメール（mail）が上書きすることはしない
+ * - ただし手入力（manual）の値を自動取込（mail/estimate）が上書きすることはしない
  * @param {Object} record - { billingMonth, card, amount, source, note }
  * @returns {string} 'written' | 'updated' | 'skipped'
  */
@@ -131,10 +132,10 @@ function writeBillingRecord_(record) {
                 const existingAmount = Number(data[i][2]) || 0;
                 const existingSource = String(data[i][4]).trim();
                 if (existingAmount === amount) return 'skipped';
-                // 手入力値はメール取込で上書きしない（金額未取得プレースホルダの0円は除く）
-                if (existingSource === 'manual' && record.source === 'mail' && existingAmount > 0) return 'skipped';
+                // 手入力値は自動取込（mail/estimate）で上書きしない（金額未取得プレースホルダの0円は除く）
+                if (existingSource === 'manual' && record.source !== 'manual' && existingAmount > 0) return 'skipped';
                 // メールに金額がないプレースホルダで既存行を潰さない
-                if (record.source === 'mail' && amount === 0 && existingAmount > 0) return 'skipped';
+                if (record.source !== 'manual' && amount === 0 && existingAmount > 0) return 'skipped';
                 sheet.getRange(i + 2, 3, 1, 4).setValues([[amount, now, record.source, record.note || '']]);
                 invalidateConfirmedCache_(record.billingMonth);
                 return 'updated';
@@ -145,6 +146,53 @@ function writeBillingRecord_(record) {
     sheet.appendRow([record.billingMonth, record.card, amount, now, record.source, record.note || '']);
     invalidateConfirmedCache_(record.billingMonth);
     return 'written';
+}
+
+/**
+ * 三井住友カードの締め期間を計算する（15日締め・翌月10日支払）
+ * 支払月 M の請求対象は (M-2)月16日 〜 (M-1)月15日 の利用分
+ * @param {string} billingMonth - 支払月 'yyyy/MM'
+ * @returns {Object} { start: Date, end: Date, label: 'M/16〜M/15' }
+ */
+function smbcBillingPeriod_(billingMonth) {
+    const parts = billingMonth.split('/');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10); // 1-based
+    const start = new Date(y, m - 3, 16, 0, 0, 0);
+    const end = new Date(y, m - 2, 15, 23, 59, 59);
+    const label = (start.getMonth() + 1) + '/16〜' + (end.getMonth() + 1) + '/15';
+    return { start: start, end: end, label: label };
+}
+
+/**
+ * 三井住友カードの請求額を、取込済み明細（利用通知メール由来）の締め期間合計から推定する
+ * 利用通知メールは全利用分が届くため、明細合計 ≒ 請求確定額となる
+ * @param {string} billingMonth - 支払月 'yyyy/MM'
+ * @returns {Object} { amount: number, label: string } 明細が1件もなければ amount は 0
+ */
+function estimateSmbcFromStatements_(billingMonth) {
+    const period = smbcBillingPeriod_(billingMonth);
+    let amount = 0;
+    if (!SPREADSHEET_ID) return { amount: 0, label: period.label };
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('家計簿');
+    if (!sheet || sheet.getLastRow() <= 1) return { amount: 0, label: period.label };
+
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+    data.forEach(function (row) {
+        if (!row[0]) return;
+        if (String(row[5] || '').trim() !== '三井住友カード') return;
+        const d = new Date(row[0]);
+        if (isNaN(d.getTime()) || d.getTime() < period.start.getTime() || d.getTime() > period.end.getTime()) return;
+        const value = Number(row[1]) || 0;
+        if ((row[4] || '支出') === '収入') {
+            amount -= value; // 返金分を差し引く
+        } else {
+            amount += value;
+        }
+    });
+
+    return { amount: Math.max(amount, 0), label: period.label };
 }
 
 /**
@@ -205,6 +253,15 @@ function fetchBillingEmailsByQuery_(query) {
                 );
                 if (!record) continue;
                 record.source = 'mail';
+                // 三井住友でメール本文に金額がない場合、取込済み明細の締め期間合計から推定する
+                if (record.amount === null && record.card === '三井住友') {
+                    const estimate = estimateSmbcFromStatements_(record.billingMonth);
+                    if (estimate.amount > 0) {
+                        record.amount = estimate.amount;
+                        record.source = 'estimate';
+                        record.note = '明細合計からの推定（' + estimate.label + '利用分）';
+                    }
+                }
                 const result = writeBillingRecord_(record);
                 if (result === 'skipped') {
                     skipped++;
@@ -225,16 +282,13 @@ function fetchBillingEmailsByQuery_(query) {
     if (userId) {
         if (writtenItems.length > 0) {
             const lines = writtenItems.map(r => '・' + r.card + 'カード ' + r.billingMonth + '支払分: ' +
-                Number(r.amount).toLocaleString() + '円');
+                Number(r.amount).toLocaleString() + '円' + (r.source === 'estimate' ? '（明細合計から推定）' : ''));
             pushLineMessage(userId, '💳 【請求確定額を記録しました】\n\n' + lines.join('\n'));
         }
         for (const r of needsAmountItems) {
             pushLineMessage(userId,
-                '⚠️ 三井住友カードの「お支払い金額のお知らせ」が届きましたが、メール本文に金額が含まれていません。\n\n' +
-                '対応方法（どちらか）:\n' +
-                '① Vpassの設定で「お支払い金額の確定メール表示内容」をオンにする（次回から自動記録されます）\n' +
-                'https://www.smbc-card.com/mem/update/vp_henkou.jsp\n\n' +
-                '② このLINEに「確定 三井住友 45000」の形式で金額を送る（' + r.billingMonth + '支払分として記録）');
+                '⚠️ 三井住友カードの「お支払い金額のお知らせ」が届きましたが、金額を取得できませんでした（メール本文に金額がなく、対象期間の明細もありません）。\n\n' +
+                'このLINEに「確定 三井住友 45000」の形式で金額を送ってください（' + r.billingMonth + '支払分として記録されます）');
         }
     }
 
