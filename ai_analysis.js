@@ -1,182 +1,170 @@
 // ===== AI分析モジュール =====
-// Gemini APIを使ったAI家計分析・アドバイス生成
+// Gemini APIを使った月次家計レポート生成
+// 対象は「先月」の確定データ（月次確定シート＋残高実測）。
+// 明細ベースの週次分析は廃止済み（不正確なデータの頻回分析は読まれないため）。
 
 /**
- * 🤖 Gemini APIを使用して家計データを分析し、冷静かつ客観的なフィードバックを生成する
- * @param {boolean} isWeekly - true=週次分析, false=月次分析
+ * 千円単位の読みやすい金額表記にする（例: 105000 → 10.5万円, 800 → 800円）
  */
-function generateAiAnalysis(isWeekly) {
+function formatYenForPrompt_(amount) {
+    const n = Math.round(Number(amount) || 0);
+    if (Math.abs(n) >= 10000) {
+        const man = Math.round(n / 1000) / 10;
+        return man + '万円';
+    }
+    return n.toLocaleString() + '円';
+}
+
+/**
+ * 🤖 先月の確定データをもとに「家計プランの見守りレポート」を生成する
+ * 視点: ①先月は赤字か ②使っていい額の答え合わせ ③NISA継続可否 ④イベント準備 ⑤今月の一手
+ */
+function generateAiAnalysis() {
     if (!GEMINI_API_KEY) return "AI分析機能が有効ではありません（GEMINI_API_KEY未設定）。";
     if (!SPREADSHEET_ID) return "DBが設定されていません。";
 
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('家計簿');
-    if (!sheet || sheet.getLastRow() <= 1) return "分析するデータがありません。";
-
-    // データの取得と集計準備
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const currentDay = now.getDate();
-    const monthlyBudget = getMonthlyBudget(ss);
+    // 対象は先月（確定データが揃っている直近の月）
+    const target = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const y = target.getFullYear();
+    const m = target.getMonth(); // 0-11
+    const monthLabel = y + '年' + (m + 1) + '月';
 
-    let currentPeriodExpense = 0;
-    let previousPeriodExpense = 0;
-    const currentCategoryMap = {};
-    const previousCategoryMap = {};
-
-    const periodLabel = isWeekly ? "今週" : "今月";
-    const prevPeriodLabel = isWeekly ? "先週" : "先月";
-
-    // 期間の判定ロジック
-    // isWeeklyの場合は直近7日間 vs その前の7日間を比較。
-    // 月次の場合は今月 vs 先月を比較する。
-    const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-    data.forEach(row => {
-        if (!row[0] || row[4] !== '支出') return;
-        const d = new Date(row[0]);
-        const amount = Number(row[1]) || 0;
-        const category = row[2] || '未分類';
-
-        if (isWeekly) {
-            const diffDays = Math.floor((now.getTime() - d.getTime()) / MS_PER_DAY);
-            if (diffDays >= 0 && diffDays < 7) {
-                currentPeriodExpense += amount;
-                currentCategoryMap[category] = (currentCategoryMap[category] || 0) + amount;
-            } else if (diffDays >= 7 && diffDays < 14) {
-                previousPeriodExpense += amount;
-                previousCategoryMap[category] = (previousCategoryMap[category] || 0) + amount;
-            }
-        } else {
-            const rYear = d.getFullYear();
-            const rMonth = d.getMonth();
-            if (rYear === currentYear && rMonth === currentMonth) {
-                currentPeriodExpense += amount;
-                currentCategoryMap[category] = (currentCategoryMap[category] || 0) + amount;
-            } else if ((rYear === currentYear && rMonth === currentMonth - 1) || (currentMonth === 0 && rYear === currentYear - 1 && rMonth === 11)) {
-                previousPeriodExpense += amount;
-                previousCategoryMap[category] = (previousCategoryMap[category] || 0) + amount;
-            }
-        }
-    });
-
-    // プロンプト用データの整形: カテゴリ別 前期比diff付き
-    const allCategories = new Set([...Object.keys(currentCategoryMap), ...Object.keys(previousCategoryMap)]);
-    const categoryDiffLines = [];
-    allCategories.forEach(cat => {
-        const curr = currentCategoryMap[cat] || 0;
-        const prev = previousCategoryMap[cat] || 0;
-        const diff = curr - prev;
-        const diffStr = diff > 0 ? `+${diff}円(↑)` : diff < 0 ? `${diff}円(↓)` : '±0';
-        const pctChange = prev > 0 ? Math.round((diff / prev) * 100) : (curr > 0 ? '+∞' : '0');
-        categoryDiffLines.push(`・${cat}: ${curr}円 (${prevPeriodLabel}: ${prev}円, 変動: ${diffStr}, ${pctChange}%)`);
-    });
-    const categoryAnalysisStr = categoryDiffLines.join('\n') || "記録なし";
-
-    // 日別支出推移データの構築
-    const dailyExpenses = {};
-    data.forEach(row => {
-        if (!row[0] || row[4] !== '支出') return;
-        const d = new Date(row[0]);
-        const amount = Number(row[1]) || 0;
-        if (isWeekly) {
-            const diffDays = Math.floor((now.getTime() - d.getTime()) / MS_PER_DAY);
-            if (diffDays >= 0 && diffDays < 7) {
-                const dayLabel = Utilities.formatDate(d, 'Asia/Tokyo', 'M/d(E)');
-                dailyExpenses[dayLabel] = (dailyExpenses[dayLabel] || 0) + amount;
-            }
-        } else {
-            const rYear = d.getFullYear();
-            const rMonth = d.getMonth();
-            if (rYear === currentYear && rMonth === currentMonth) {
-                const dayLabel = Utilities.formatDate(d, 'Asia/Tokyo', 'M/d');
-                dailyExpenses[dayLabel] = (dailyExpenses[dayLabel] || 0) + amount;
-            }
-        }
-    });
-    const dailyStr = Object.keys(dailyExpenses).sort().map(k => `  ${k}: ${dailyExpenses[k]}円`).join('\n') || "  記録なし";
-
-    // 進行度（今月の場合）
-    let budgetProgressStr = "";
-    let dailyAvgStr = "";
-    if (!isWeekly) {
-        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-        const progressPercent = Math.round((currentDay / daysInMonth) * 100);
-        const expensePercent = Math.round((currentPeriodExpense / monthlyBudget) * 100);
-        const remainingDays = daysInMonth - currentDay;
-        const remainingBudget = monthlyBudget - currentPeriodExpense;
-        const dailyAvailable = remainingDays > 0 ? Math.round(remainingBudget / remainingDays) : 0;
-        budgetProgressStr = `【月間予算】: ${monthlyBudget}円\n  日数経過: ${currentDay}/${daysInMonth}日 (${progressPercent}%)\n  予算消化: ${currentPeriodExpense}/${monthlyBudget}円 (${expensePercent}%)\n  残り予算: ${remainingBudget}円 (残${remainingDays}日)`;
-        dailyAvgStr = `1日あたりの許容上限: ${dailyAvailable}円/日`;
-        if (currentDay > 0) {
-            const dailyPace = Math.round(currentPeriodExpense / currentDay);
-            const projectedTotal = dailyPace * daysInMonth;
-            dailyAvgStr += `\n  現在の日平均: ${dailyPace}円/日\n  このペースの月末予測: ${projectedTotal}円 (予算比 ${Math.round(projectedTotal / monthlyBudget * 100)}%)`;
-        }
-    } else {
-        const weeklyBudget = Math.floor(monthlyBudget / 4);
-        const expensePercent = Math.round((currentPeriodExpense / weeklyBudget) * 100);
-        budgetProgressStr = `【週次目安予算（月予算の1/4）】: ${weeklyBudget}円 (消化率: ${expensePercent}%)`;
-        if (Object.keys(dailyExpenses).length > 0) {
-            const dailyPace = Math.round(currentPeriodExpense / Object.keys(dailyExpenses).length);
-            dailyAvgStr = `日平均支出: ${dailyPace}円/日`;
-        }
+    const settings = getSettingsData();
+    const income = Number(settings.income) || 0;
+    if (income <= 0) {
+        return "分析には月収の設定が必要です。ダッシュボードの⚙️設定から「月収（手取り）」を入力してください。";
     }
 
-    // 浪費ランキング（支出額上位3カテゴリ）
-    const sortedCats = Object.entries(currentCategoryMap).sort((a, b) => b[1] - a[1]);
-    const top3Str = sortedCats.slice(0, 3).map((c, i) => `  ${i + 1}位: ${c[0]} ${c[1]}円 (全体の${Math.round(c[1] / (currentPeriodExpense || 1) * 100)}%)`).join('\n');
+    // 家計モデルと先月の確定実績（計算ロジックはダッシュボードと共通）
+    const s = buildSavingsSummary_(settings, y, m, []);
+    const hasCardData = s.cardBreakdown.some(function (c) { return c.amount > 0; });
+    if (s.confirmedSpending <= 0 && !hasCardData) {
+        return monthLabel + "の確定データがまだありません。請求確定メールの取込（fetchBillingEmails）後にもう一度お試しください。";
+    }
 
-    // Gemini へのシステムプロンプト（人格設定）
-    const systemPrompt = `あなたは10年以上の経験を持つ冷徹なファイナンシャルアナリストです。
-家計簿データに基づき、感情を排して鋭く客観的な分析レポートを作成してください。
+    const variableActual = s.confirmedSpending - s.fixedSum; // 先月の変動費実績
+    const variableDiff = variableActual - s.safeToSpend;     // 計画との差（プラス=使いすぎ）
 
-## 出力フォーマット（厳守）
+    // 直近3ヶ月の変動費平均（NISA継続判定の材料。確定データがある月のみ）
+    let variableSum = 0, variableMonths = 0;
+    for (let i = 1; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const c = calcConfirmedSpending_(d.getFullYear(), d.getMonth());
+        if (c.total > 0) {
+            variableSum += (c.total - s.fixedSum);
+            variableMonths++;
+        }
+    }
+    const avgVariable = variableMonths > 0 ? Math.round(variableSum / variableMonths) : variableActual;
 
-### 📊 概況
-予算に対する進捗と、前期比較の要約を2〜3文で。
+    // NISA継続の判定材料: 変動費の実測平均を前提に、NISA+予備費を払える余力があるか
+    const cashFlowForNisa = income - s.fixedSum - avgVariable - s.eventsMonthly;
+    const nisaHeadroom = cashFlowForNisa - s.nisaMonthly - s.reserve;
 
-### 🔍 カテゴリ別診断
-前期比で増加が顕著なカテゴリを**金額と増加率つき**で指摘。
-減少したカテゴリがあればそれも記載。
+    // カード別内訳（未確定があれば明示）
+    const cardLines = s.cardBreakdown.map(function (c) {
+        return '・' + c.card + ': ' + (c.confirmed ? formatYenForPrompt_(c.amount) : '未確定（要確認）');
+    }).join('\n');
 
-### ⚠️ 浪費アラート
-支出上位カテゴリの中で「削減余地がある」ものを特定し、
-**具体的にいくら削れば予算内に収まるか**を金額で提示。
+    // 実測貯蓄（残高入力ベース）
+    const actualSavingsStr = (s.actualSavings !== null && s.actualSavings !== undefined)
+        ? formatYenForPrompt_(s.actualSavings)
+        : 'データなし（残高が未入力の月がある）';
 
-### 📈 ペース診断
-日次の支出ペースから月末の着地予測を計算し、
-予算内に収まるかどうかを断定。
+    // 今後の年間イベント
+    const currentMonth1 = now.getMonth() + 1;
+    const upcomingEvents = (settings.annualEvents || []).filter(function (ev) {
+        return !ev.month || Number(ev.month) >= currentMonth1;
+    });
+    const eventsStr = upcomingEvents.length > 0
+        ? upcomingEvents.map(function (ev) {
+            return '・' + (ev.month ? ev.month + '月 ' : '時期未定 ') + ev.name + ' ' + formatYenForPrompt_(ev.amount);
+        }).join('\n')
+        : '登録なし';
 
-### 💡 アクション提案
-残りの期間で予算内に着地するための**具体的な行動**を2〜3個、箇条書きで。
+    // カテゴリ内訳（参考・明細ベース。傾向把握のみに使用）
+    let categoryStr = '記録なし';
+    let uncategorizedRate = 0;
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = ss.getSheetByName('家計簿');
+        if (sheet && sheet.getLastRow() > 1) {
+            const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+            const catMap = {};
+            let catTotal = 0, uncatTotal = 0;
+            rows.forEach(function (row) {
+                if (!row[0] || (row[4] || '支出') !== '支出') return;
+                const d = new Date(row[0]);
+                if (d.getFullYear() !== y || d.getMonth() !== m) return;
+                const amount = Number(row[1]) || 0;
+                const cat = row[2] || '未分類';
+                catMap[cat] = (catMap[cat] || 0) + amount;
+                catTotal += amount;
+                if (cat === '未分類') uncatTotal += amount;
+            });
+            const sorted = Object.entries(catMap).sort(function (a, b) { return b[1] - a[1]; });
+            if (sorted.length > 0) {
+                categoryStr = sorted.slice(0, 5).map(function (c) {
+                    return '・' + c[0] + ': ' + formatYenForPrompt_(c[1]);
+                }).join('\n');
+                uncategorizedRate = catTotal > 0 ? Math.round(uncatTotal / catTotal * 100) : 0;
+            }
+        }
+    } catch (e) { console.warn('カテゴリ集計失敗:', e.message); }
+
+    // Gemini へのシステムプロンプト
+    const systemPrompt = `あなたは家計プランの伴走者（信頼できるファイナンシャルプランナー）です。
+ユーザーの目的は「貯蓄と消費のバランスが保たれ、年間でやりたいことができ、子どもの進学や老後に心理的な安心を持つこと」。
+渡されたデータはすべて計算済みです。あなたの仕事は計算ではなく、「結局どうなのか」を分かりやすく伝えることです。
+
+## 出力フォーマット（この5ブロックのみ。LINEで読むため Markdown記法は禁止、絵文字見出し＋改行だけで構成）
+
+🌡️ 先月の結論
+黒字か赤字かを最初の一文で断定し、貯蓄額を添える。
+
+💸 使っていい額の答え合わせ
+変動費の計画と実績の差を一言で。超過していたら最大の原因カテゴリを1つだけ挙げる。
+
+📈 NISAは続けて大丈夫？
+判定材料の数字を使って「余裕あり／ぎりぎり／見直し推奨」のどれかを金額つきで断定。
+
+🎉 イベント準備
+直近の年間イベントに向けた一言（イベント登録がなければこのブロックごと省略）。
+
+✅ 今月やること
+1つだけ。具体的な金額つきで。
 
 ## ルール
-- 絵文字はセクション見出しのみ使用可。本文には不要。
-- 「頑張りましょう」等の応援は不要。事実と数字のみ。
-- 全体で600〜800文字程度。`;
+- 全体で300〜500文字。短いほど良い。
+- 数字は「約10.5万円」のような読みやすい表記のまま使う。細かい端数を書かない。
+- 責めない・煽らない・説教しない。ただし赤字や不足は曖昧にせずはっきり書く。
+- 「データなし」「未確定」の項目は、無理に分析せず「まだ分からない」と正直に書く。
+- 専門用語・横文字を使わない。「キャッシュフロー」ではなく「お金の出入り」。`;
 
-    // ユーザープロンプト（データ入力）
-    const userPrompt = `以下の家計データから分析レポートを作成してください。
+    // ユーザープロンプト（計算済みデータ）
+    const userPrompt = `■ ${monthLabel}の実績（確定ベース）
+・確定支出の合計: ${formatYenForPrompt_(s.confirmedSpending)}（うち固定費 ${formatYenForPrompt_(s.fixedSum)}）
+・カード請求の内訳:
+${cardLines}
+・現金の実測貯蓄（残高の前月差分）: ${actualSavingsStr}
+・貯蓄見込み（月収 − NISA − 確定支出）: ${formatYenForPrompt_(s.projectedSavings)}
 
-${budgetProgressStr}
-${dailyAvgStr}
+■ 家計プラン（設定値）
+・月収 ${formatYenForPrompt_(income)} − 固定費 ${formatYenForPrompt_(s.fixedSum)} − NISA ${formatYenForPrompt_(s.nisaMonthly)} − イベント積立 ${formatYenForPrompt_(s.eventsMonthly)} − 予備費 ${formatYenForPrompt_(s.reserve)}
+　→ 使っていい額（変動費の予算）: ${formatYenForPrompt_(s.safeToSpend)}
+・${monthLabel}の変動費実績: ${formatYenForPrompt_(variableActual)}（予算比 ${variableDiff >= 0 ? '+' : ''}${formatYenForPrompt_(variableDiff)}）
 
-■ カテゴリ別支出（${periodLabel} vs ${prevPeriodLabel}）
-${categoryAnalysisStr}
+■ NISA継続の判定材料（直近${variableMonths || 1}ヶ月の実績ベース）
+・変動費の平均: ${formatYenForPrompt_(avgVariable)}
+・月収 − 固定費 − 変動費平均 − イベント積立 = ${formatYenForPrompt_(cashFlowForNisa)}
+・そこから NISA ${formatYenForPrompt_(s.nisaMonthly)} と予備費 ${formatYenForPrompt_(s.reserve)} を払うと ${nisaHeadroom >= 0 ? '余裕' : '不足'} ${formatYenForPrompt_(Math.abs(nisaHeadroom))}
 
-■ 支出額ランキング（${periodLabel}）
-${top3Str || "  データなし"}
+■ 今後の年間イベント
+${eventsStr}
 
-■ 日別支出推移（${periodLabel}）
-${dailyStr}
-
-■ 合計
-  ${periodLabel}: ${currentPeriodExpense}円
-  ${prevPeriodLabel}: ${previousPeriodExpense}円
-  増減: ${currentPeriodExpense - previousPeriodExpense >= 0 ? '+' : ''}${currentPeriodExpense - previousPeriodExpense}円`;
+■ カテゴリ内訳（参考値・明細ベース・未分類率${uncategorizedRate}%）
+${categoryStr}`;
 
     // Gemini API リクエスト (gemini-2.5-flash を使用)
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
@@ -224,7 +212,7 @@ ${dailyStr}
  */
 function getAiAnalysis() {
     try {
-        const resultText = generateAiAnalysis(false);
+        const resultText = generateAiAnalysis();
         // generateAiAnalysis はエラー時も文字列を返すため、エラープレフィックスで判定
         if (resultText && resultText.startsWith('分析エラー:')) {
             logError('getAiAnalysis', resultText);

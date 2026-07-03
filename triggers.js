@@ -2,7 +2,8 @@
 // タイムドリブントリガーで定期実行される関数群
 
 /**
- * ⏰ 定期実行トリガー用：月次レポート送信（毎月1日の朝などを想定）
+ * ⏰ 定期実行トリガー用：月次レポート送信
+ * 毎月3日朝に実行（1日20時の残高リマインドで前月末残高が入力された後）
  */
 function sendMonthlyReport() {
     const userId = getLineUserId_();
@@ -11,8 +12,8 @@ function sendMonthlyReport() {
         return;
     }
 
-    const analysisResult = generateAiAnalysis(false); // 月次
-    const message = "📈 【みえる化家計簿】月次データ分析レポート\n\n" + analysisResult;
+    const analysisResult = generateAiAnalysis();
+    const message = "📈 【みえる化家計簿】先月の家計レポート\n\n" + analysisResult;
 
     pushLineMessage(userId, message);
     console.log("月次レポートをLINEに送信しました");
@@ -35,9 +36,10 @@ function setupMonthlyTrigger() {
         }
     });
 
+    // レポートは残高入力（1日20時リマインド）の後に送るため3日朝に設定
     ScriptApp.newTrigger('sendMonthlyReport')
         .timeBased()
-        .onMonthDay(1)
+        .onMonthDay(3)
         .atHour(8)
         .create();
 
@@ -47,7 +49,7 @@ function setupMonthlyTrigger() {
         .atHour(20)
         .create();
 
-    console.log("月次トリガーを設定しました（レポート: 毎月1日8時台, 残高リマインド: 毎月1日20時台）。週次レポートのトリガーは削除済み。");
+    console.log("月次トリガーを設定しました（残高リマインド: 毎月1日20時台, レポート: 毎月3日8時台）。週次レポートのトリガーは削除済み。");
 }
 
 /**
@@ -73,14 +75,17 @@ function sendBalanceReminder() {
     const now = new Date();
     let message = "🏦 【月イチ残高チェック】\n\n先月おつかれさまでした！\n主要口座の残高を「残高 口座名 金額」の形式で送ってね。\n\n✅ 例：残高 ゆうちょ 1234567";
 
-    // 先月の実測貯蓄額（先月末残高 − 先々月末残高）が計算できれば添える
+    // 直近で確定している月の実測貯蓄を添える（入力の動機付け）
+    // この時点では先月末残高は未入力（今から入力してもらう）ため、表示できるのは前々月分。
+    // 月末残高は「翌月3日までの入力」を採用（buildSavingsSummary_ と同じ猶予ルール）
     try {
-        const prevEnd = getBalancesAsOf_(new Date(now.getFullYear(), now.getMonth(), 0));
-        const prev2End = getBalancesAsOf_(new Date(now.getFullYear(), now.getMonth() - 1, 0));
-        if (prevEnd.latestDate && prev2End.latestDate) {
-            const diff = prevEnd.total - prev2End.total;
+        const m2 = new Date(now.getFullYear(), now.getMonth() - 2, 1); // 前々月
+        const m2End = getBalancesAsOf_(new Date(m2.getFullYear(), m2.getMonth() + 1, 3, 23, 59, 59));
+        const m3End = getBalancesAsOf_(new Date(m2.getFullYear(), m2.getMonth(), 3, 23, 59, 59));
+        if (m2End.latestDate && m3End.latestDate) {
+            const diff = m2End.total - m3End.total;
             const sign = diff >= 0 ? '+' : '';
-            message += `\n\n📈 先月の実測貯蓄: ${sign}${diff.toLocaleString()}円`;
+            message += `\n\n📈 ${m2.getMonth() + 1}月の実測貯蓄: ${sign}${diff.toLocaleString()}円`;
         }
     } catch (e) { /* 集計失敗時はリマインドのみ */ }
 

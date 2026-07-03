@@ -117,8 +117,10 @@ function buildSavingsSummary_(settings, year, month, thisMonthData) {
     const confirmed = calcConfirmedSpending_(year, month);
 
     // 実測貯蓄: 当月末時点の残高合計 − 前月末時点の残高合計（残高シートから）
-    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
-    const prevMonthEnd = new Date(year, month, 0, 23, 59, 59);
+    // 残高入力は月初リマインド（毎月1日20時）に応じて行われるため、
+    // 翌月3日までの入力を「月末残高」とみなす猶予を設ける
+    const monthEnd = new Date(year, month + 1, 3, 23, 59, 59);
+    const prevMonthEnd = new Date(year, month, 3, 23, 59, 59);
     const balances = getBalancesAsOf_(monthEnd);
     const prevBalances = getBalancesAsOf_(prevMonthEnd);
     const actualSavings = (balances.latestDate && prevBalances.latestDate)
