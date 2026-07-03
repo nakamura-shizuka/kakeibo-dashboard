@@ -44,6 +44,68 @@
 
         <!-- ===== ホームタブ ===== -->
         <div class="tab-content active" id="tab-home">
+            <!-- 今月使っていい額カード（計画層: 月収−固定費−NISA−イベント積立−予備費） -->
+            <div class="card" id="safeToSpendCard" style="display:none;">
+                <div class="card-title" style="margin-bottom: 16px;">
+                    <span class="icon">💸</span> 今月使っていい額
+                </div>
+                <div id="safeToSpendBody">
+                    <div class="summary-amount">
+                        <span class="currency">¥</span><span id="safeToSpendAmount">0</span>
+                    </div>
+                    <div class="summary-budget" id="safeToSpendFormula"></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill safe" id="safeSpendFill"></div>
+                    </div>
+                    <div class="progress-label">
+                        <span>使った額(速報) ¥<span id="provisionalVariable">0</span></span>
+                        <span>残り ¥<span id="safeRemain">0</span></span>
+                    </div>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px; line-height:1.5;">
+                        ※「使った額」はカード明細等の速報値（参考）。正確な集計は月次の請求確定額で行われます
+                    </div>
+                </div>
+                <div id="safeToSpendSetupHint" style="display:none; font-size:0.85rem; color:var(--text-muted); line-height:1.6;">
+                    右上の ⚙️ 設定から「月収（手取り）」を入力すると、<br>毎月使っていい額がここに表示されます✨
+                </div>
+            </div>
+
+            <!-- 今月の貯蓄カード（Layer 1: 確定支出＋残高実測） -->
+            <div class="card" id="savingsCard" style="display:none;">
+                <div class="card-title" style="margin-bottom: 16px;">
+                    <span class="icon">💰</span> 今月の貯蓄
+                </div>
+                <div class="mini-cards">
+                    <div class="mini-card">
+                        <div class="mini-label">貯蓄見込み（現金）</div>
+                        <div class="mini-value green" id="projectedSavings">—</div>
+                    </div>
+                    <div class="mini-card">
+                        <div class="mini-label">実測貯蓄（残高差分）</div>
+                        <div class="mini-value accent" id="actualSavings">—</div>
+                    </div>
+                </div>
+                <div class="balance-status">
+                    <div class="balance-row">
+                        <span class="balance-label">確定支出（請求＋現金）</span>
+                        <span class="balance-value" id="confirmedSpendingValue">¥0</span>
+                    </div>
+                    <div class="balance-row">
+                        <span class="balance-label">NISA積立</span>
+                        <span class="balance-value" id="nisaMonthlyValue">¥0</span>
+                    </div>
+                    <div class="balance-row">
+                        <span class="balance-label">残高合計 <span id="balanceDateLabel"
+                                style="font-weight:normal; font-size:0.7rem;"></span></span>
+                        <span class="balance-value" id="balanceTotalValue">—</span>
+                    </div>
+                </div>
+                <div id="cardBreakdownList" style="margin-top:12px;"></div>
+                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px; line-height:1.5;">
+                    ※残高はLINEで「残高 ゆうちょ 1234567」と送ると記録されます（月1回）
+                </div>
+            </div>
+
             <!-- 支出サマリーカード -->
             <div class="card" id="summaryCard" style="display:none;">
                 <div class="card-title" style="margin-bottom: 16px;">
@@ -232,6 +294,45 @@
                 (円)</label>
             <div class="input-row" style="margin-bottom: 0;">
                 <input type="number" id="settingBudget" class="input-field" placeholder="例: 150000">
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label
+                style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 6px; display: block;">💴
+                月収（手取り・円）</label>
+            <div class="input-row" style="margin-bottom: 0;">
+                <input type="number" id="settingIncome" class="input-field" placeholder="例: 280000">
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;">
+                ※「今月使っていい額」の計算に使われます
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px; display: flex; gap: 12px;">
+            <div style="flex: 1;">
+                <label
+                    style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 6px; display: block;">📈
+                    NISA積立（月・円）</label>
+                <input type="number" id="settingNisa" class="input-field" placeholder="例: 100000" style="width: 100%;">
+            </div>
+            <div style="flex: 1;">
+                <label
+                    style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 6px; display: block;">🛟
+                    予備費率（%）</label>
+                <input type="number" id="settingReserveRate" class="input-field" placeholder="5" style="width: 100%;">
+            </div>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700;">🎉 年間イベント予算</label>
+                <button class="chip" style="padding: 4px 12px; font-size: 0.75rem; margin-bottom:0;"
+                    onclick="addAnnualEventRow()">＋ 追加</button>
+            </div>
+            <div id="annualEventsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; line-height: 1.4;">
+                ※旅行・プレゼントなど年間で見込みが立つ支出。合計÷12が毎月の積立分として<br>「使っていい額」から差し引かれます
             </div>
         </div>
 

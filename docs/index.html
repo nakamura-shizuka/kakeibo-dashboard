@@ -869,6 +869,68 @@
 
         <!-- ===== ホームタブ ===== -->
         <div class="tab-content active" id="tab-home">
+            <!-- 今月使っていい額カード（計画層: 月収−固定費−NISA−イベント積立−予備費） -->
+            <div class="card" id="safeToSpendCard" style="display:none;">
+                <div class="card-title" style="margin-bottom: 16px;">
+                    <span class="icon">💸</span> 今月使っていい額
+                </div>
+                <div id="safeToSpendBody">
+                    <div class="summary-amount">
+                        <span class="currency">¥</span><span id="safeToSpendAmount">0</span>
+                    </div>
+                    <div class="summary-budget" id="safeToSpendFormula"></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill safe" id="safeSpendFill"></div>
+                    </div>
+                    <div class="progress-label">
+                        <span>使った額(速報) ¥<span id="provisionalVariable">0</span></span>
+                        <span>残り ¥<span id="safeRemain">0</span></span>
+                    </div>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px; line-height:1.5;">
+                        ※「使った額」はカード明細等の速報値（参考）。正確な集計は月次の請求確定額で行われます
+                    </div>
+                </div>
+                <div id="safeToSpendSetupHint" style="display:none; font-size:0.85rem; color:var(--text-muted); line-height:1.6;">
+                    右上の ⚙️ 設定から「月収（手取り）」を入力すると、<br>毎月使っていい額がここに表示されます✨
+                </div>
+            </div>
+
+            <!-- 今月の貯蓄カード（Layer 1: 確定支出＋残高実測） -->
+            <div class="card" id="savingsCard" style="display:none;">
+                <div class="card-title" style="margin-bottom: 16px;">
+                    <span class="icon">💰</span> 今月の貯蓄
+                </div>
+                <div class="mini-cards">
+                    <div class="mini-card">
+                        <div class="mini-label">貯蓄見込み（現金）</div>
+                        <div class="mini-value green" id="projectedSavings">—</div>
+                    </div>
+                    <div class="mini-card">
+                        <div class="mini-label">実測貯蓄（残高差分）</div>
+                        <div class="mini-value accent" id="actualSavings">—</div>
+                    </div>
+                </div>
+                <div class="balance-status">
+                    <div class="balance-row">
+                        <span class="balance-label">確定支出（請求＋現金）</span>
+                        <span class="balance-value" id="confirmedSpendingValue">¥0</span>
+                    </div>
+                    <div class="balance-row">
+                        <span class="balance-label">NISA積立</span>
+                        <span class="balance-value" id="nisaMonthlyValue">¥0</span>
+                    </div>
+                    <div class="balance-row">
+                        <span class="balance-label">残高合計 <span id="balanceDateLabel"
+                                style="font-weight:normal; font-size:0.7rem;"></span></span>
+                        <span class="balance-value" id="balanceTotalValue">—</span>
+                    </div>
+                </div>
+                <div id="cardBreakdownList" style="margin-top:12px;"></div>
+                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:8px; line-height:1.5;">
+                    ※残高はLINEで「残高 ゆうちょ 1234567」と送ると記録されます（月1回）
+                </div>
+            </div>
+
             <!-- 支出サマリーカード -->
             <div class="card" id="summaryCard" style="display:none;">
                 <div class="card-title" style="margin-bottom: 16px;">
@@ -1057,6 +1119,45 @@
                 (円)</label>
             <div class="input-row" style="margin-bottom: 0;">
                 <input type="number" id="settingBudget" class="input-field" placeholder="例: 150000">
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label
+                style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 6px; display: block;">💴
+                月収（手取り・円）</label>
+            <div class="input-row" style="margin-bottom: 0;">
+                <input type="number" id="settingIncome" class="input-field" placeholder="例: 280000">
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;">
+                ※「今月使っていい額」の計算に使われます
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px; display: flex; gap: 12px;">
+            <div style="flex: 1;">
+                <label
+                    style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 6px; display: block;">📈
+                    NISA積立（月・円）</label>
+                <input type="number" id="settingNisa" class="input-field" placeholder="例: 100000" style="width: 100%;">
+            </div>
+            <div style="flex: 1;">
+                <label
+                    style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 6px; display: block;">🛟
+                    予備費率（%）</label>
+                <input type="number" id="settingReserveRate" class="input-field" placeholder="5" style="width: 100%;">
+            </div>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 700;">🎉 年間イベント予算</label>
+                <button class="chip" style="padding: 4px 12px; font-size: 0.75rem; margin-bottom:0;"
+                    onclick="addAnnualEventRow()">＋ 追加</button>
+            </div>
+            <div id="annualEventsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; line-height: 1.4;">
+                ※旅行・プレゼントなど年間で見込みが立つ支出。合計÷12が毎月の積立分として<br>「使っていい額」から差し引かれます
             </div>
         </div>
 
@@ -1673,6 +1774,75 @@
             return list;
         }
 
+        // ===== 年間イベント予算の行UI（固定費UIと同パターン） =====
+
+        function renderAnnualEvents() {
+            var container = document.getElementById('annualEventsList');
+            container.innerHTML = '';
+            var list = currentSettings.annualEvents || [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">年間イベントは設定されていません</div>';
+                return;
+            }
+            list.forEach(function (item, index) {
+                container.appendChild(createAnnualEventElement(item, index));
+            });
+        }
+
+        function createAnnualEventElement(item, index) {
+            var row = document.createElement('div');
+            row.className = 'annual-event-row fixed-expense-row';
+            row.setAttribute('data-index', index);
+
+            var monthSelect = '<select class="ae-month" style="flex: 0 0 60px; padding:8px 2px;">';
+            monthSelect += '<option value=""' + (!item.month ? ' selected' : '') + '>月未定</option>';
+            for (var i = 1; i <= 12; i++) {
+                var sel = (i == item.month) ? 'selected' : '';
+                monthSelect += '<option value="' + i + '" ' + sel + '>' + i + '月</option>';
+            }
+            monthSelect += '</select>';
+
+            row.innerHTML =
+                monthSelect +
+                '<input type="text" class="ae-name" style="flex:1; min-width:60px;" placeholder="名前(例:沖縄旅行)" value="' + escapeHtml(item.name || '') + '">' +
+                '<input type="number" class="ae-amount" style="width:80px;" placeholder="金額" value="' + (item.amount || '') + '">' +
+                '<button class="del-btn" onclick="removeAnnualEventRow(this)">×</button>';
+            return row;
+        }
+
+        function addAnnualEventRow() {
+            var container = document.getElementById('annualEventsList');
+            if (container.querySelector('.annual-event-row') === null && container.innerHTML.indexOf('設定されていません') !== -1) {
+                container.innerHTML = '';
+            }
+            container.appendChild(createAnnualEventElement({ month: '', name: '', amount: '' }, container.children.length));
+        }
+
+        function removeAnnualEventRow(btnEl) {
+            var row = btnEl.closest('.annual-event-row');
+            if (row && row.parentNode) {
+                row.parentNode.removeChild(row);
+            }
+            if (document.getElementById('annualEventsList').children.length === 0) {
+                document.getElementById('annualEventsList').innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">年間イベントは設定されていません</div>';
+            }
+        }
+
+        function gatherAnnualEvents() {
+            var list = [];
+            document.querySelectorAll('#annualEventsList .annual-event-row').forEach(function (row) {
+                var monthEl = row.querySelector('.ae-month');
+                var nameEl = row.querySelector('.ae-name');
+                var amountEl = row.querySelector('.ae-amount');
+                if (nameEl && amountEl && nameEl.value.trim() && amountEl.value) {
+                    var item = { name: nameEl.value.trim(), amount: parseInt(amountEl.value) };
+                    if (monthEl && monthEl.value) item.month = parseInt(monthEl.value);
+                    list.push(item);
+                }
+            });
+            return list;
+        }
+
         document.getElementById('settingCategories').addEventListener('blur', function () {
             var catsStr = this.value;
             var cats = catsStr.split(',').map(function (c) { return c.trim(); }).filter(function (c) { return c; });
@@ -1706,8 +1876,13 @@
 
             document.getElementById('settingBudget').value = currentSettings.budget;
             document.getElementById('settingCategories').value = currentSettings.categories;
+            document.getElementById('settingIncome').value = currentSettings.income || '';
+            document.getElementById('settingNisa').value = currentSettings.nisaMonthly || '';
+            document.getElementById('settingReserveRate').value =
+                currentSettings.reserveRate !== undefined && currentSettings.reserveRate !== null ? currentSettings.reserveRate : 5;
 
             renderFixedExpenses();
+            renderAnnualEvents();
 
             modal.classList.add('active');
             overlay.classList.add('active');
@@ -1724,6 +1899,10 @@
             var newBudget = document.getElementById('settingBudget').value;
             var newCats = document.getElementById('settingCategories').value;
             var newFx = gatherFixedExpenses();
+            var newIncome = document.getElementById('settingIncome').value;
+            var newNisa = document.getElementById('settingNisa').value;
+            var newReserveRate = document.getElementById('settingReserveRate').value;
+            var newEvents = gatherAnnualEvents();
 
             if (!newBudget || !newCats) {
                 showToast('予算とカテゴリを入力してください', true);
@@ -1736,12 +1915,21 @@
             btn.textContent = '保存中...';
 
             var fxStr = JSON.stringify(newFx);
+            var eventsStr = JSON.stringify(newEvents);
+
+            function applyLocalSettings() {
+                currentSettings.budget = parseInt(newBudget);
+                currentSettings.categories = newCats;
+                currentSettings.fixedExpenses = newFx;
+                currentSettings.income = parseInt(newIncome) || 0;
+                currentSettings.nisaMonthly = parseInt(newNisa) || 0;
+                currentSettings.reserveRate = newReserveRate !== '' ? parseInt(newReserveRate) : 5;
+                currentSettings.annualEvents = newEvents;
+            }
 
             if (!GAS_API_URL && typeof google === 'undefined') {
                 setTimeout(function () {
-                    currentSettings.budget = parseInt(newBudget);
-                    currentSettings.categories = newCats;
-                    currentSettings.fixedExpenses = newFx;
+                    applyLocalSettings();
                     btn.disabled = false;
                     btn.textContent = originalText;
                     closeSettingsModal();
@@ -1755,15 +1943,17 @@
             callGAS('saveSettings', {
                 budget: newBudget,
                 categories: newCats,
-                fixedCosts: fxStr
+                fixedCosts: fxStr,
+                income: newIncome || 0,
+                nisaMonthly: newNisa || 0,
+                annualEvents: eventsStr,
+                reserveRate: newReserveRate !== '' ? newReserveRate : 5
             })
                 .then(function (res) {
                     btn.disabled = false;
                     btn.textContent = originalText;
                     if (res.success) {
-                        currentSettings.budget = parseInt(newBudget);
-                        currentSettings.categories = newCats;
-                        currentSettings.fixedExpenses = newFx;
+                        applyLocalSettings();
                         closeSettingsModal();
                         showToast('設定を保存しました');
                         invalidateCache();
@@ -2214,7 +2404,20 @@
                                 { date: (targetMonth + 1) + "/05", category: "食費", memo: "スーパー", method: "カード", amount: 5600, type: "支出" },
                                 { date: (targetMonth + 1) + "/04", category: "交通費", memo: "チャージ", method: "現金", amount: 3000, type: "支出" },
                                 { date: (targetMonth + 1) + "/02", category: "日用品", memo: "ドラッグストア", method: "PayPay", amount: 2800, type: "支出" }
-                            ]
+                            ],
+                            savings: {
+                                income: 300000, nisaMonthly: 100000, fixedSum: 80000,
+                                eventsMonthly: 25000, reserve: 15000, reserveRate: 5,
+                                safeToSpend: 80000, provisionalVariable: 52000,
+                                confirmedSpending: 95000, nonCardSpending: 33000,
+                                cardBreakdown: [
+                                    { card: "三井住友", amount: 34500, confirmed: true },
+                                    { card: "PayPay", amount: 27500, confirmed: true },
+                                    { card: "イオン", amount: 0, confirmed: false }
+                                ],
+                                projectedSavings: 105000, actualSavings: 98000,
+                                balanceTotal: 3250000, balanceDate: targetYear + "/0" + (targetMonth + 1) + "/01"
+                            }
                         };
                     } else {
                         mockData = {
@@ -2271,6 +2474,7 @@
                 return;
             }
 
+            renderSavings(data.savings);
             renderSummary(data);
 
             // AIアドバイスカード（分析タブ内に常に表示）
@@ -2351,6 +2555,116 @@
             });
 
             showCard('recentRecordsCard');
+        }
+
+        /**
+         * 💸💰 「使っていい額」「今月の貯蓄」カードの描画（計画層 + Layer 1）
+         */
+        function renderSavings(savings) {
+            if (!savings) return;
+
+            // --- 使っていい額カード ---
+            var body = document.getElementById('safeToSpendBody');
+            var hint = document.getElementById('safeToSpendSetupHint');
+            if (!savings.income || savings.income <= 0) {
+                // 月収未設定: 設定への導線のみ表示
+                body.style.display = 'none';
+                hint.style.display = 'block';
+                showCard('safeToSpendCard');
+                return;
+            }
+            body.style.display = 'block';
+            hint.style.display = 'none';
+
+            var safe = savings.safeToSpend || 0;
+            var used = savings.provisionalVariable || 0;
+            var remain = safe - used;
+            var percent = safe > 0 ? Math.round((used / safe) * 100) : 0;
+
+            animateNumber('safeToSpendAmount', safe);
+            document.getElementById('safeToSpendFormula').textContent =
+                '月収 ¥' + savings.income.toLocaleString() +
+                ' − 固定費 ¥' + (savings.fixedSum || 0).toLocaleString() +
+                ' − NISA ¥' + (savings.nisaMonthly || 0).toLocaleString() +
+                ' − イベント積立 ¥' + (savings.eventsMonthly || 0).toLocaleString() +
+                ' − 予備費 ¥' + (savings.reserve || 0).toLocaleString();
+            document.getElementById('provisionalVariable').textContent = used.toLocaleString();
+            document.getElementById('safeRemain').textContent = remain.toLocaleString();
+
+            var fillClass = 'safe';
+            if (percent > 100) fillClass = 'danger';
+            else if (percent > 75) fillClass = 'warning';
+            var fill = document.getElementById('safeSpendFill');
+            fill.className = 'progress-fill ' + fillClass;
+            setTimeout(function () {
+                fill.style.width = Math.min(percent, 100) + '%';
+            }, 100);
+
+            showCard('safeToSpendCard');
+
+            // --- 今月の貯蓄カード ---
+            var projEl = document.getElementById('projectedSavings');
+            var proj = savings.projectedSavings;
+            projEl.textContent = (proj >= 0 ? '+' : '') + '¥' + proj.toLocaleString();
+            projEl.className = 'mini-value ' + (proj >= 0 ? 'green' : 'danger');
+
+            var actualEl = document.getElementById('actualSavings');
+            if (savings.actualSavings !== null && savings.actualSavings !== undefined) {
+                var act = savings.actualSavings;
+                actualEl.textContent = (act >= 0 ? '+' : '') + '¥' + act.toLocaleString();
+                actualEl.className = 'mini-value ' + (act >= 0 ? 'accent' : 'danger');
+            } else {
+                actualEl.textContent = '残高未入力';
+                actualEl.className = 'mini-value';
+                actualEl.style.fontSize = '0.8rem';
+            }
+
+            document.getElementById('confirmedSpendingValue').textContent = '¥' + (savings.confirmedSpending || 0).toLocaleString();
+            document.getElementById('nisaMonthlyValue').textContent = '¥' + (savings.nisaMonthly || 0).toLocaleString();
+
+            var balEl = document.getElementById('balanceTotalValue');
+            var balDateEl = document.getElementById('balanceDateLabel');
+            if (savings.balanceTotal !== null && savings.balanceTotal !== undefined) {
+                balEl.textContent = '¥' + savings.balanceTotal.toLocaleString();
+                balDateEl.textContent = savings.balanceDate ? '(' + savings.balanceDate + '時点)' : '';
+            } else {
+                balEl.textContent = '未入力';
+                balDateEl.textContent = '';
+            }
+
+            // カード別の請求確定状況
+            var listEl = document.getElementById('cardBreakdownList');
+            listEl.textContent = '';
+            (savings.cardBreakdown || []).forEach(function (item) {
+                var row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:0.85rem; border-bottom:1px dashed #eee;';
+
+                var nameSpan = document.createElement('span');
+                nameSpan.textContent = '💳 ' + item.card + 'カード';
+                nameSpan.style.color = 'var(--text-secondary)';
+
+                var valueSpan = document.createElement('span');
+                var badge = document.createElement('span');
+                badge.style.cssText = 'font-size:0.65rem; padding:2px 8px; border-radius:10px; margin-right:8px; font-weight:700;';
+                if (item.confirmed) {
+                    badge.textContent = '確定';
+                    badge.style.background = '#d1fae5';
+                    badge.style.color = '#059669';
+                } else {
+                    badge.textContent = '未確定';
+                    badge.style.background = '#fef3c7';
+                    badge.style.color = '#b45309';
+                }
+                valueSpan.appendChild(badge);
+                valueSpan.appendChild(document.createTextNode(item.confirmed ? '¥' + item.amount.toLocaleString() : '—'));
+                valueSpan.style.fontWeight = '700';
+
+                row.appendChild(nameSpan);
+                row.appendChild(valueSpan);
+                listEl.appendChild(row);
+            });
+
+            showCard('savingsCard');
         }
 
         /**
@@ -2435,7 +2749,7 @@
                 return;
             }
 
-            callGAS('getAiAnalysis', { isWeekly: false })
+            callGAS('getAiAnalysis')
                 .then(function (result) {
                     if (loadingSpan) loadingSpan.style.display = 'none';
                     if (result.success) {

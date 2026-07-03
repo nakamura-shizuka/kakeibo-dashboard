@@ -220,10 +220,11 @@ ${dailyStr}
 
 /**
  * 📊 ダッシュボードの即時分析ボタンから呼ばれるAPI
+ * 週次分析は廃止済み（不正確な明細ベースの頻回分析は読まれないため）。常に月次で実行する。
  */
-function getAiAnalysis(isWeekly) {
+function getAiAnalysis() {
     try {
-        const resultText = generateAiAnalysis(isWeekly);
+        const resultText = generateAiAnalysis(false);
         // generateAiAnalysis はエラー時も文字列を返すため、エラープレフィックスで判定
         if (resultText && resultText.startsWith('分析エラー:')) {
             logError('getAiAnalysis', resultText);

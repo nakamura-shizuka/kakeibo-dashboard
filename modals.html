@@ -92,6 +92,75 @@
             return list;
         }
 
+        // ===== 年間イベント予算の行UI（固定費UIと同パターン） =====
+
+        function renderAnnualEvents() {
+            var container = document.getElementById('annualEventsList');
+            container.innerHTML = '';
+            var list = currentSettings.annualEvents || [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">年間イベントは設定されていません</div>';
+                return;
+            }
+            list.forEach(function (item, index) {
+                container.appendChild(createAnnualEventElement(item, index));
+            });
+        }
+
+        function createAnnualEventElement(item, index) {
+            var row = document.createElement('div');
+            row.className = 'annual-event-row fixed-expense-row';
+            row.setAttribute('data-index', index);
+
+            var monthSelect = '<select class="ae-month" style="flex: 0 0 60px; padding:8px 2px;">';
+            monthSelect += '<option value=""' + (!item.month ? ' selected' : '') + '>月未定</option>';
+            for (var i = 1; i <= 12; i++) {
+                var sel = (i == item.month) ? 'selected' : '';
+                monthSelect += '<option value="' + i + '" ' + sel + '>' + i + '月</option>';
+            }
+            monthSelect += '</select>';
+
+            row.innerHTML =
+                monthSelect +
+                '<input type="text" class="ae-name" style="flex:1; min-width:60px;" placeholder="名前(例:沖縄旅行)" value="' + escapeHtml(item.name || '') + '">' +
+                '<input type="number" class="ae-amount" style="width:80px;" placeholder="金額" value="' + (item.amount || '') + '">' +
+                '<button class="del-btn" onclick="removeAnnualEventRow(this)">×</button>';
+            return row;
+        }
+
+        function addAnnualEventRow() {
+            var container = document.getElementById('annualEventsList');
+            if (container.querySelector('.annual-event-row') === null && container.innerHTML.indexOf('設定されていません') !== -1) {
+                container.innerHTML = '';
+            }
+            container.appendChild(createAnnualEventElement({ month: '', name: '', amount: '' }, container.children.length));
+        }
+
+        function removeAnnualEventRow(btnEl) {
+            var row = btnEl.closest('.annual-event-row');
+            if (row && row.parentNode) {
+                row.parentNode.removeChild(row);
+            }
+            if (document.getElementById('annualEventsList').children.length === 0) {
+                document.getElementById('annualEventsList').innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:12px; background:#F8FAFC; border-radius:12px;">年間イベントは設定されていません</div>';
+            }
+        }
+
+        function gatherAnnualEvents() {
+            var list = [];
+            document.querySelectorAll('#annualEventsList .annual-event-row').forEach(function (row) {
+                var monthEl = row.querySelector('.ae-month');
+                var nameEl = row.querySelector('.ae-name');
+                var amountEl = row.querySelector('.ae-amount');
+                if (nameEl && amountEl && nameEl.value.trim() && amountEl.value) {
+                    var item = { name: nameEl.value.trim(), amount: parseInt(amountEl.value) };
+                    if (monthEl && monthEl.value) item.month = parseInt(monthEl.value);
+                    list.push(item);
+                }
+            });
+            return list;
+        }
+
         document.getElementById('settingCategories').addEventListener('blur', function () {
             var catsStr = this.value;
             var cats = catsStr.split(',').map(function (c) { return c.trim(); }).filter(function (c) { return c; });
@@ -125,8 +194,13 @@
 
             document.getElementById('settingBudget').value = currentSettings.budget;
             document.getElementById('settingCategories').value = currentSettings.categories;
+            document.getElementById('settingIncome').value = currentSettings.income || '';
+            document.getElementById('settingNisa').value = currentSettings.nisaMonthly || '';
+            document.getElementById('settingReserveRate').value =
+                currentSettings.reserveRate !== undefined && currentSettings.reserveRate !== null ? currentSettings.reserveRate : 5;
 
             renderFixedExpenses();
+            renderAnnualEvents();
 
             modal.classList.add('active');
             overlay.classList.add('active');
@@ -143,6 +217,10 @@
             var newBudget = document.getElementById('settingBudget').value;
             var newCats = document.getElementById('settingCategories').value;
             var newFx = gatherFixedExpenses();
+            var newIncome = document.getElementById('settingIncome').value;
+            var newNisa = document.getElementById('settingNisa').value;
+            var newReserveRate = document.getElementById('settingReserveRate').value;
+            var newEvents = gatherAnnualEvents();
 
             if (!newBudget || !newCats) {
                 showToast('予算とカテゴリを入力してください', true);
@@ -155,12 +233,21 @@
             btn.textContent = '保存中...';
 
             var fxStr = JSON.stringify(newFx);
+            var eventsStr = JSON.stringify(newEvents);
+
+            function applyLocalSettings() {
+                currentSettings.budget = parseInt(newBudget);
+                currentSettings.categories = newCats;
+                currentSettings.fixedExpenses = newFx;
+                currentSettings.income = parseInt(newIncome) || 0;
+                currentSettings.nisaMonthly = parseInt(newNisa) || 0;
+                currentSettings.reserveRate = newReserveRate !== '' ? parseInt(newReserveRate) : 5;
+                currentSettings.annualEvents = newEvents;
+            }
 
             if (!GAS_API_URL && typeof google === 'undefined') {
                 setTimeout(function () {
-                    currentSettings.budget = parseInt(newBudget);
-                    currentSettings.categories = newCats;
-                    currentSettings.fixedExpenses = newFx;
+                    applyLocalSettings();
                     btn.disabled = false;
                     btn.textContent = originalText;
                     closeSettingsModal();
@@ -174,15 +261,17 @@
             callGAS('saveSettings', {
                 budget: newBudget,
                 categories: newCats,
-                fixedCosts: fxStr
+                fixedCosts: fxStr,
+                income: newIncome || 0,
+                nisaMonthly: newNisa || 0,
+                annualEvents: eventsStr,
+                reserveRate: newReserveRate !== '' ? newReserveRate : 5
             })
                 .then(function (res) {
                     btn.disabled = false;
                     btn.textContent = originalText;
                     if (res.success) {
-                        currentSettings.budget = parseInt(newBudget);
-                        currentSettings.categories = newCats;
-                        currentSettings.fixedExpenses = newFx;
+                        applyLocalSettings();
                         closeSettingsModal();
                         showToast('設定を保存しました');
                         invalidateCache();

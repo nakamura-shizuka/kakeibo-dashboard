@@ -53,7 +53,40 @@ function getSettingsData() {
             }
         }
 
-        const result = { budget: budget, categories: categories, fixedExpenses: fixedExpenses, accounts: accounts };
+        // ===== 計画層の設定（Layer 0: 家計モデル） =====
+        let income = 0;
+        if (sheet.getRange('F8').getValue() === 'Monthly_Income') {
+            income = Number(sheet.getRange('G8').getValue()) || 0;
+        }
+
+        let nisaMonthly = 0;
+        if (sheet.getRange('F9').getValue() === 'NISA_Monthly') {
+            nisaMonthly = Number(sheet.getRange('G9').getValue()) || 0;
+        }
+
+        let annualEvents = [];
+        if (sheet.getRange('F10').getValue() === 'Annual_Events') {
+            const eventsStr = sheet.getRange('G10').getValue();
+            if (eventsStr) {
+                try {
+                    annualEvents = JSON.parse(eventsStr);
+                } catch (e) {
+                    logError('年間イベント設定パース失敗', e.message + ' / 保存値: ' + eventsStr);
+                    warnings.push('年間イベント設定の読み込みに失敗しました');
+                }
+            }
+        }
+
+        let reserveRate = DEFAULT_RESERVE_RATE;
+        if (sheet.getRange('F11').getValue() === 'Reserve_Rate') {
+            const savedRate = sheet.getRange('G11').getValue();
+            if (savedRate !== '' && savedRate !== null) reserveRate = Number(savedRate) || 0;
+        }
+
+        const result = {
+            budget: budget, categories: categories, fixedExpenses: fixedExpenses, accounts: accounts,
+            income: income, nisaMonthly: nisaMonthly, annualEvents: annualEvents, reserveRate: reserveRate
+        };
         if (warnings.length > 0) result.warning = warnings.join(' / ');
         return result;
     } catch (e) {
@@ -65,7 +98,7 @@ function getSettingsData() {
 /**
  * ⚙️ ユーザーの設定データを保存する
  */
-function saveSettingsData(budget, categoriesStr, fixedExpensesStr, accountsStr) {
+function saveSettingsData(budget, categoriesStr, fixedExpensesStr, accountsStr, income, nisaMonthly, annualEventsStr, reserveRate) {
     if (!SPREADSHEET_ID) return { success: false, error: 'DB未設定' };
     try {
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -93,6 +126,32 @@ function saveSettingsData(budget, categoriesStr, fixedExpensesStr, accountsStr) 
             sheet.getRange('F7').setValue('Accounts_List');
             sheet.getRange('G7').setValue(accountsStr);
         }
+
+        if (income !== undefined) {
+            sheet.getRange('F8').setValue('Monthly_Income');
+            sheet.getRange('G8').setValue(Number(income) || 0);
+        }
+
+        if (nisaMonthly !== undefined) {
+            sheet.getRange('F9').setValue('NISA_Monthly');
+            sheet.getRange('G9').setValue(Number(nisaMonthly) || 0);
+        }
+
+        if (annualEventsStr !== undefined) {
+            sheet.getRange('F10').setValue('Annual_Events');
+            sheet.getRange('G10').setValue(annualEventsStr);
+        }
+
+        if (reserveRate !== undefined) {
+            sheet.getRange('F11').setValue('Reserve_Rate');
+            sheet.getRange('G11').setValue(Number(reserveRate) || 0);
+        }
+
+        // 設定変更は当月のKPI計算に影響するためキャッシュを無効化
+        try {
+            const now = new Date();
+            invalidateDashboardCache(now.getFullYear(), now.getMonth());
+        } catch (e) { /* キャッシュ無効化失敗は無視 */ }
 
         return { success: true };
     } catch (e) {

@@ -2,23 +2,6 @@
 // タイムドリブントリガーで定期実行される関数群
 
 /**
- * ⏰ 定期実行トリガー用：週次レポート送信（毎週土曜日の夕方などを想定）
- */
-function sendWeeklyReport() {
-    const userId = getLineUserId_();
-    if (!userId) {
-        console.warn("LINE_USER_IDが設定されていないため、通知をスキップしました。\n対処法: (1) LINEからBotへ一度メッセージを送る、または (2) GASのスクリプトプロパティに LINE_USER_ID を手動設定してください。");
-        return;
-    }
-
-    const analysisResult = generateAiAnalysis(true); // 週次
-    const message = "📊 【みえる化家計簿】週次データ分析レポート\n\n" + analysisResult;
-
-    pushLineMessage(userId, message);
-    console.log("週次レポートをLINEに送信しました (userId: " + userId.substring(0, 8) + "...)");
-}
-
-/**
  * ⏰ 定期実行トリガー用：月次レポート送信（毎月1日の朝などを想定）
  */
 function sendMonthlyReport() {
@@ -36,47 +19,35 @@ function sendMonthlyReport() {
 }
 
 /**
- * ⏰ 週次レポート用のトリガーを作成する (毎週土曜日の夕方 18:00頃)
- */
-function setupWeeklyTrigger() {
-    // 既存の同名トリガーを削除
-    const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(trigger => {
-        if (trigger.getHandlerFunction() === 'sendWeeklyReport') {
-            ScriptApp.deleteTrigger(trigger);
-        }
-    });
-
-    // 毎週土曜日の18時頃に実行
-    ScriptApp.newTrigger('sendWeeklyReport')
-        .timeBased()
-        .onWeekDay(ScriptApp.WeekDay.SATURDAY)
-        .atHour(18)
-        .create();
-
-    console.log("週次レポート(sendWeeklyReport)のトリガーを土曜日18時台に設定しました。");
-}
-
-/**
- * ⏰ 月次レポート用のトリガーを作成する (毎月1日の朝 08:00頃)
+ * ⏰ 月次トリガーを設定する
+ * - sendMonthlyReport: 毎月1日 08:00頃（月次AI分析レポート）
+ * - sendBalanceReminder: 毎月1日 20:00頃（残高入力リマインド）
+ * 週次レポート(sendWeeklyReport)は廃止済み。残存トリガーがあればここで削除する。
  */
 function setupMonthlyTrigger() {
-    // 既存の同名トリガーを削除
-    const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(trigger => {
-        if (trigger.getHandlerFunction() === 'sendMonthlyReport') {
+    const monthlyFunctions = ['sendMonthlyReport', 'sendBalanceReminder'];
+    const removedFunctions = ['sendWeeklyReport']; // 廃止済み（orphanトリガー掃除用）
+
+    ScriptApp.getProjectTriggers().forEach(trigger => {
+        const handler = trigger.getHandlerFunction();
+        if (monthlyFunctions.indexOf(handler) >= 0 || removedFunctions.indexOf(handler) >= 0) {
             ScriptApp.deleteTrigger(trigger);
         }
     });
 
-    // 毎月1日の8時頃に実行
     ScriptApp.newTrigger('sendMonthlyReport')
         .timeBased()
         .onMonthDay(1)
         .atHour(8)
         .create();
 
-    console.log("月次レポート(sendMonthlyReport)のトリガーを毎月1日の8時台に設定しました。");
+    ScriptApp.newTrigger('sendBalanceReminder')
+        .timeBased()
+        .onMonthDay(1)
+        .atHour(20)
+        .create();
+
+    console.log("月次トリガーを設定しました（レポート: 毎月1日8時台, 残高リマインド: 毎月1日20時台）。週次レポートのトリガーは削除済み。");
 }
 
 /**
@@ -84,19 +55,50 @@ function setupMonthlyTrigger() {
  * 初回セットアップ時や、トリガーを作り直したい時にエディタから手動実行してください。
  */
 function setupAITriggers() {
-    setupWeeklyTrigger();
     setupMonthlyTrigger();
-    console.log("AI分析用の定期トリガー(週次/月次)のセットアップが完了しました。");
+    console.log("AI分析用の定期トリガー(月次)のセットアップが完了しました。");
+}
+
+/**
+ * 🏦 毎月1日20時に残高入力を促すLINEリマインド
+ * 先月の実測貯蓄額を添えて入力の動機付けをする
+ */
+function sendBalanceReminder() {
+    const userId = getLineUserId_();
+    if (!userId) {
+        console.warn("LINE_USER_IDが設定されていないため、残高リマインドをスキップしました。");
+        return;
+    }
+
+    const now = new Date();
+    let message = "🏦 【月イチ残高チェック】\n\n先月おつかれさまでした！\n主要口座の残高を「残高 口座名 金額」の形式で送ってね。\n\n✅ 例：残高 ゆうちょ 1234567";
+
+    // 先月の実測貯蓄額（先月末残高 − 先々月末残高）が計算できれば添える
+    try {
+        const prevEnd = getBalancesAsOf_(new Date(now.getFullYear(), now.getMonth(), 0));
+        const prev2End = getBalancesAsOf_(new Date(now.getFullYear(), now.getMonth() - 1, 0));
+        if (prevEnd.latestDate && prev2End.latestDate) {
+            const diff = prevEnd.total - prev2End.total;
+            const sign = diff >= 0 ? '+' : '';
+            message += `\n\n📈 先月の実測貯蓄: ${sign}${diff.toLocaleString()}円`;
+        }
+    } catch (e) { /* 集計失敗時はリマインドのみ */ }
+
+    message += "\n\n💳 イオンカードの請求額はAEON Payアプリで確認して「確定 イオン 45000」の形式で送ってね（月1回・10秒）";
+
+    pushLineMessage(userId, message);
+    console.log("残高リマインドをLINEに送信しました");
 }
 
 /**
  * ⏰ 日次トリガーを設定する
  * - autoRecordFixedExpenses: 毎日06時（固定費自動記録）
+ * - fetchBillingEmails: 毎日07時（請求確定メール取込・Layer 1）
  * - checkBudgetAndAlert: 毎日08時（予算アラート）
- * - dailyFetchCardEmails: 1時間ごと（Gmail カード明細取込）
+ * - dailyFetchCardEmails: 1時間ごと（Gmail カード明細取込・Layer 2）
  */
 function setupDailyTrigger() {
-    const dailyFunctions = ['autoRecordFixedExpenses', 'checkBudgetAndAlert', 'dailyFetchCardEmails'];
+    const dailyFunctions = ['autoRecordFixedExpenses', 'checkBudgetAndAlert', 'dailyFetchCardEmails', 'fetchBillingEmails'];
 
     // 既存の同名トリガーを先に削除
     ScriptApp.getProjectTriggers().forEach(function (trigger) {
@@ -106,10 +108,11 @@ function setupDailyTrigger() {
     });
 
     ScriptApp.newTrigger('autoRecordFixedExpenses').timeBased().everyDays(1).atHour(6).create();
+    ScriptApp.newTrigger('fetchBillingEmails').timeBased().everyDays(1).atHour(7).create();
     ScriptApp.newTrigger('dailyFetchCardEmails').timeBased().everyHours(1).create(); // 毎時取込（当日中に反映）
     ScriptApp.newTrigger('checkBudgetAndAlert').timeBased().everyDays(1).atHour(8).create();
 
-    console.log("トリガー設定完了（固定費記録: 毎日6時, Gmail取込: 毎時, 予算アラート: 毎日8時）");
+    console.log("トリガー設定完了（固定費記録: 毎日6時, 請求確定取込: 毎日7時, Gmail明細取込: 毎時, 予算アラート: 毎日8時）");
 }
 
 /**
@@ -119,7 +122,7 @@ function setupDailyTrigger() {
 function setupAllTriggers() {
     setupDailyTrigger();
     setupAITriggers();
-    console.log("✅ 全トリガーのセットアップが完了しました（日次/週次/月次）。");
+    console.log("✅ 全トリガーのセットアップが完了しました（日次/月次）。");
 }
 
 /**

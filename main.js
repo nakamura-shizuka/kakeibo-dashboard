@@ -48,7 +48,11 @@ function doPost(e) {
                         bodyJson.budget,
                         bodyJson.categories,
                         bodyJson.fixedCosts,
-                        bodyJson.accounts
+                        bodyJson.accounts,
+                        bodyJson.income,
+                        bodyJson.nisaMonthly,
+                        bodyJson.annualEvents,
+                        bodyJson.reserveRate
                     );
                     break;
                 case 'getDashboardData':
@@ -67,7 +71,7 @@ function doPost(e) {
                     result = getYearlyReportData(Number(bodyJson.year));
                     break;
                 case 'getAiAnalysis':
-                    result = getAiAnalysis(bodyJson.isWeekly === true || bodyJson.isWeekly === 'true');
+                    result = getAiAnalysis();
                     break;
                 case 'getMonthlyRecords':
                     result = getMonthlyRecords(Number(bodyJson.year), Number(bodyJson.month));
@@ -168,7 +172,7 @@ function doGet(e) {
                     result = getYearlyReportData(Number(e.parameter.year));
                     break;
                 case 'getAiAnalysis':
-                    result = getAiAnalysis(e.parameter.isWeekly === 'true');
+                    result = getAiAnalysis();
                     break;
                 case 'getMonthlyRecords':
                     result = getMonthlyRecords(
@@ -198,7 +202,11 @@ function doGet(e) {
                         e.parameter.budget,
                         e.parameter.categories,
                         e.parameter.fixedCosts,
-                        e.parameter.accounts
+                        e.parameter.accounts,
+                        e.parameter.income,
+                        e.parameter.nisaMonthly,
+                        e.parameter.annualEvents,
+                        e.parameter.reserveRate
                     );
                     break;
                 default:

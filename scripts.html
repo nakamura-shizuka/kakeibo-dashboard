@@ -237,7 +237,20 @@
                                 { date: (targetMonth + 1) + "/05", category: "食費", memo: "スーパー", method: "カード", amount: 5600, type: "支出" },
                                 { date: (targetMonth + 1) + "/04", category: "交通費", memo: "チャージ", method: "現金", amount: 3000, type: "支出" },
                                 { date: (targetMonth + 1) + "/02", category: "日用品", memo: "ドラッグストア", method: "PayPay", amount: 2800, type: "支出" }
-                            ]
+                            ],
+                            savings: {
+                                income: 300000, nisaMonthly: 100000, fixedSum: 80000,
+                                eventsMonthly: 25000, reserve: 15000, reserveRate: 5,
+                                safeToSpend: 80000, provisionalVariable: 52000,
+                                confirmedSpending: 95000, nonCardSpending: 33000,
+                                cardBreakdown: [
+                                    { card: "三井住友", amount: 34500, confirmed: true },
+                                    { card: "PayPay", amount: 27500, confirmed: true },
+                                    { card: "イオン", amount: 0, confirmed: false }
+                                ],
+                                projectedSavings: 105000, actualSavings: 98000,
+                                balanceTotal: 3250000, balanceDate: targetYear + "/0" + (targetMonth + 1) + "/01"
+                            }
                         };
                     } else {
                         mockData = {
@@ -294,6 +307,7 @@
                 return;
             }
 
+            renderSavings(data.savings);
             renderSummary(data);
 
             // AIアドバイスカード（分析タブ内に常に表示）
@@ -374,6 +388,116 @@
             });
 
             showCard('recentRecordsCard');
+        }
+
+        /**
+         * 💸💰 「使っていい額」「今月の貯蓄」カードの描画（計画層 + Layer 1）
+         */
+        function renderSavings(savings) {
+            if (!savings) return;
+
+            // --- 使っていい額カード ---
+            var body = document.getElementById('safeToSpendBody');
+            var hint = document.getElementById('safeToSpendSetupHint');
+            if (!savings.income || savings.income <= 0) {
+                // 月収未設定: 設定への導線のみ表示
+                body.style.display = 'none';
+                hint.style.display = 'block';
+                showCard('safeToSpendCard');
+                return;
+            }
+            body.style.display = 'block';
+            hint.style.display = 'none';
+
+            var safe = savings.safeToSpend || 0;
+            var used = savings.provisionalVariable || 0;
+            var remain = safe - used;
+            var percent = safe > 0 ? Math.round((used / safe) * 100) : 0;
+
+            animateNumber('safeToSpendAmount', safe);
+            document.getElementById('safeToSpendFormula').textContent =
+                '月収 ¥' + savings.income.toLocaleString() +
+                ' − 固定費 ¥' + (savings.fixedSum || 0).toLocaleString() +
+                ' − NISA ¥' + (savings.nisaMonthly || 0).toLocaleString() +
+                ' − イベント積立 ¥' + (savings.eventsMonthly || 0).toLocaleString() +
+                ' − 予備費 ¥' + (savings.reserve || 0).toLocaleString();
+            document.getElementById('provisionalVariable').textContent = used.toLocaleString();
+            document.getElementById('safeRemain').textContent = remain.toLocaleString();
+
+            var fillClass = 'safe';
+            if (percent > 100) fillClass = 'danger';
+            else if (percent > 75) fillClass = 'warning';
+            var fill = document.getElementById('safeSpendFill');
+            fill.className = 'progress-fill ' + fillClass;
+            setTimeout(function () {
+                fill.style.width = Math.min(percent, 100) + '%';
+            }, 100);
+
+            showCard('safeToSpendCard');
+
+            // --- 今月の貯蓄カード ---
+            var projEl = document.getElementById('projectedSavings');
+            var proj = savings.projectedSavings;
+            projEl.textContent = (proj >= 0 ? '+' : '') + '¥' + proj.toLocaleString();
+            projEl.className = 'mini-value ' + (proj >= 0 ? 'green' : 'danger');
+
+            var actualEl = document.getElementById('actualSavings');
+            if (savings.actualSavings !== null && savings.actualSavings !== undefined) {
+                var act = savings.actualSavings;
+                actualEl.textContent = (act >= 0 ? '+' : '') + '¥' + act.toLocaleString();
+                actualEl.className = 'mini-value ' + (act >= 0 ? 'accent' : 'danger');
+            } else {
+                actualEl.textContent = '残高未入力';
+                actualEl.className = 'mini-value';
+                actualEl.style.fontSize = '0.8rem';
+            }
+
+            document.getElementById('confirmedSpendingValue').textContent = '¥' + (savings.confirmedSpending || 0).toLocaleString();
+            document.getElementById('nisaMonthlyValue').textContent = '¥' + (savings.nisaMonthly || 0).toLocaleString();
+
+            var balEl = document.getElementById('balanceTotalValue');
+            var balDateEl = document.getElementById('balanceDateLabel');
+            if (savings.balanceTotal !== null && savings.balanceTotal !== undefined) {
+                balEl.textContent = '¥' + savings.balanceTotal.toLocaleString();
+                balDateEl.textContent = savings.balanceDate ? '(' + savings.balanceDate + '時点)' : '';
+            } else {
+                balEl.textContent = '未入力';
+                balDateEl.textContent = '';
+            }
+
+            // カード別の請求確定状況
+            var listEl = document.getElementById('cardBreakdownList');
+            listEl.textContent = '';
+            (savings.cardBreakdown || []).forEach(function (item) {
+                var row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:0.85rem; border-bottom:1px dashed #eee;';
+
+                var nameSpan = document.createElement('span');
+                nameSpan.textContent = '💳 ' + item.card + 'カード';
+                nameSpan.style.color = 'var(--text-secondary)';
+
+                var valueSpan = document.createElement('span');
+                var badge = document.createElement('span');
+                badge.style.cssText = 'font-size:0.65rem; padding:2px 8px; border-radius:10px; margin-right:8px; font-weight:700;';
+                if (item.confirmed) {
+                    badge.textContent = '確定';
+                    badge.style.background = '#d1fae5';
+                    badge.style.color = '#059669';
+                } else {
+                    badge.textContent = '未確定';
+                    badge.style.background = '#fef3c7';
+                    badge.style.color = '#b45309';
+                }
+                valueSpan.appendChild(badge);
+                valueSpan.appendChild(document.createTextNode(item.confirmed ? '¥' + item.amount.toLocaleString() : '—'));
+                valueSpan.style.fontWeight = '700';
+
+                row.appendChild(nameSpan);
+                row.appendChild(valueSpan);
+                listEl.appendChild(row);
+            });
+
+            showCard('savingsCard');
         }
 
         /**
@@ -458,7 +582,7 @@
                 return;
             }
 
-            callGAS('getAiAnalysis', { isWeekly: false })
+            callGAS('getAiAnalysis')
                 .then(function (result) {
                     if (loadingSpan) loadingSpan.style.display = 'none';
                     if (result.success) {
