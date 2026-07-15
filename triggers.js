@@ -203,17 +203,17 @@ function autoRecordFixedExpenses() {
         // すでに今月同額同名の記録があればスキップ
         if (recordedKeys.has(key)) return;
 
-        const timeStamp = Utilities.formatDate(now, "Asia/Tokyo", "yyyy/MM/dd HH:mm:ss");
-        kakeiboSheet.insertRowAfter(1);
-        kakeiboSheet.getRange("A2:G2").setValues([[
-            timeStamp,
+        const dateStr = Utilities.formatDate(now, "Asia/Tokyo", "yyyy/MM/dd");
+        kakeiboSheet.appendRow([
+            dateStr,
             amount,
             cat,
             memo,
             "支出",
             "自動(固定費)",
-            targetUserId
-        ]]);
+            true, // IsFixed
+            ''    // Account
+        ]);
 
         recordedItems.push(`${memo} (${amount.toLocaleString()}円)`);
         recordedKeys.add(key); // このループ内の重複防止
